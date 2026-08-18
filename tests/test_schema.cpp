@@ -43,6 +43,9 @@ static_assert(fieldpack::valid_field<x_field>);
 static_assert(fieldpack::valid_field<y_field>);
 static_assert(fieldpack::valid_field<id_field>);
 static_assert(fieldpack::valid_field<count_field>);
+static_assert(fieldpack::valid_field<const x_field>);
+static_assert(fieldpack::valid_field<volatile x_field>);
+static_assert(fieldpack::valid_field<const volatile x_field>);
 
 using mixed_schema = fieldpack::schema<id_field, x_field, count_field, y_field>;
 using reordered_schema = fieldpack::schema<y_field, count_field, x_field, id_field>;
@@ -131,6 +134,7 @@ using volatile_value_schema = fieldpack::schema<volatile_field>;
 using trivial_class_schema = fieldpack::schema<trivial_class_field>;
 using non_trivial_schema = fieldpack::schema<non_trivial_field>;
 using malformed_schema = fieldpack::schema<int>;
+using qualified_descriptor_schema = fieldpack::schema<const x_field>;
 
 static_assert(!fieldpack::valid_schema<empty_schema>);
 static_assert(!fieldpack::valid_schema<duplicate_schema>);
@@ -140,6 +144,7 @@ static_assert(!fieldpack::valid_schema<volatile_value_schema>);
 static_assert(!fieldpack::valid_schema<trivial_class_schema>);
 static_assert(!fieldpack::valid_schema<non_trivial_schema>);
 static_assert(!fieldpack::valid_schema<malformed_schema>);
+static_assert(!fieldpack::valid_schema<qualified_descriptor_schema>);
 
 struct unknown {};
 

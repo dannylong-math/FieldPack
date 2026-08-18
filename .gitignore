@@ -4,3 +4,4 @@ build-*/
 compile_commands.json
 docs/dist/
 docs/node_modules/
+_planning/

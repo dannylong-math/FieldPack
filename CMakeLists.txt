@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(MyProject
+project(FieldPack
     VERSION 0.1.0
-    DESCRIPTION "A C++ library"
+    DESCRIPTION "Utilities to manage efficient data layout of parameter packs"
     LANGUAGES CXX
 )
 

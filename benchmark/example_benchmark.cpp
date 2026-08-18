@@ -1,10 +1,10 @@
 #include <benchmark/benchmark.h>
-#include <my_project/example.hpp>
+#include <fieldpack/example.hpp>
 
 static void benchmark_add(benchmark::State& state)
 {
     for (auto _ : state) {
-        auto result = my_project::add(static_cast<int>(state.range(0)), 42);
+        auto result = fieldpack::add(static_cast<int>(state.range(0)), 42);
         benchmark::DoNotOptimize(result);
     }
 }

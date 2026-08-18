@@ -1,11 +1,11 @@
 ---
 title: Introduction
-description: API documentation and guides for MyProject.
+description: API documentation and guides for FieldPack.
 ---
 
-# MyProject
+# FieldPack
 
-MyProject is a C++23 header-only library created from the cpp-template
+FieldPack is a C++23 header-only library created from the cpp-template
 repository. Replace this page with installation instructions, examples, design
 notes, and other project guides.
 

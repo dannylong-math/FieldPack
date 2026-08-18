@@ -1,5 +1,5 @@
 {
-  "name": "my-project-docs",
+  "name": "fieldpack-docs",
   "private": true,
   "scripts": {
     "build": "sourcey build -o dist",

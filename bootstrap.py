@@ -12,11 +12,11 @@ from typing import Dict, Iterable
 
 
 ROOT = Path(__file__).resolve().parent
-TEMPLATE_PROJECT = "MyProject"
-TEMPLATE_NAMESPACE = "my_project"
-TEMPLATE_REPOSITORY = "dannylong-math/cpp-template"
-TEMPLATE_DOCS_PACKAGE = "my-project-docs"
-TEMPLATE_DESCRIPTION = "A C++ library"
+TEMPLATE_PROJECT = "FieldPack"
+TEMPLATE_NAMESPACE = "fieldpack"
+TEMPLATE_REPOSITORY = "dannylong-math/FieldPack"
+TEMPLATE_DOCS_PACKAGE = "fieldpack-docs"
+TEMPLATE_DESCRIPTION = "Utilities to manage efficient data layout of parameter packs"
 
 
 def default_namespace(project_name: str) -> str:

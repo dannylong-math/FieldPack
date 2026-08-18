@@ -1,4 +1,4 @@
-import { defineConfig, doxygen, markdown } from "sourcey";
+import { defineConfig, doxygen } from "sourcey";
 
 export default defineConfig({
   name: "FieldPack",
@@ -7,15 +7,8 @@ export default defineConfig({
   navigation: {
     tabs: [
       {
-        tab: "Guide",
-        slug: "",
-        source: markdown({
-          groups: [{ group: "Getting Started", pages: ["introduction"] }],
-        }),
-      },
-      {
         tab: "C++ API",
-        slug: "api",
+        slug: "",
         source: doxygen({
           xml: "../build/doxygen/xml",
           language: "cpp",

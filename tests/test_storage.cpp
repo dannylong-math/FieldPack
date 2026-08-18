@@ -9,7 +9,7 @@
 #include <memory>
 #include <new>
 #include <ranges>
-#include <type_traits>
+// #include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -48,13 +48,13 @@ struct tracking_allocation_policy {
         return allocation;
     }
 
-    static void deallocate_bytes(void* allocation, std::size_t bytes, std::size_t alignment) noexcept
+    static void deallocate_bytes(void* allocation, std::size_t /*unused*/, std::size_t alignment) noexcept
     {
         if (allocation == nullptr) {
             return;
         }
 
-        ::operator delete(allocation, bytes, std::align_val_t{alignment});
+        ::operator delete(allocation, std::align_val_t{alignment});
         ++deallocations;
         --live_allocations;
     }

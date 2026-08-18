@@ -49,12 +49,15 @@ struct aligned_new_policy {
      * @brief Release a block returned by @ref allocate_bytes.
      *
      * @param allocation Pointer returned by @ref allocate_bytes.
-     * @param bytes Original byte count supplied to @ref allocate_bytes.
+     * The byte-count argument preserves the common allocation-policy
+     * interface but is not needed by the portable unsized aligned-delete
+     * overload.
+     *
      * @param alignment Original alignment supplied to @ref allocate_bytes.
      */
-    static void deallocate_bytes(void* allocation, std::size_t bytes, std::size_t alignment) noexcept
+    static void deallocate_bytes(void* allocation, std::size_t /*unused*/, std::size_t alignment) noexcept
     {
-        ::operator delete(allocation, bytes, std::align_val_t{alignment});
+        ::operator delete(allocation, std::align_val_t{alignment});
     }
 };
 

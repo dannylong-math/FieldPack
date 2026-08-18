@@ -141,7 +141,10 @@ public:
      *
      * @tparam U Source allocator's value type.
      */
-    template<class U> constexpr aligned_allocator(const aligned_allocator<U, Alignment, AllocationPolicy>& /*unused*/) noexcept {}
+    template<class U>
+    constexpr aligned_allocator(const aligned_allocator<U, Alignment, AllocationPolicy>& /*unused*/) noexcept
+    {
+    }
 
     /**
      * @brief Return the largest element count whose byte size is representable.
@@ -208,8 +211,9 @@ public:
  * @return Always `true` because neither allocator contains state.
  */
 template<class T, class U, std::size_t Alignment, class AllocationPolicy>
-[[nodiscard]] constexpr auto operator==(const aligned_allocator<T, Alignment, AllocationPolicy>& /*unused*/,
-                                        const aligned_allocator<U, Alignment, AllocationPolicy>& /*unused*/) noexcept -> bool
+[[nodiscard]] constexpr auto
+operator==(const aligned_allocator<T, Alignment, AllocationPolicy>& /*unused*/,
+           const aligned_allocator<U, Alignment, AllocationPolicy>& /*unused*/) noexcept -> bool
 {
     return true;
 }

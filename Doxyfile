@@ -1,5 +1,5 @@
-PROJECT_NAME           = "MyProject"
-PROJECT_BRIEF          = "A C++ library"
+PROJECT_NAME           = "FieldPack"
+PROJECT_BRIEF          = "Utilities to manage efficient data layout of parameter packs"
 
 OUTPUT_DIRECTORY       = build/doxygen
 INPUT                  = include

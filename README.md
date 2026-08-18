@@ -1,8 +1,8 @@
-# MyProject
+# FieldPack
 
-[![Unit tests](https://github.com/dannylong-math/cpp-template/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/dannylong-math/cpp-template/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/dannylong-math/cpp-template/graph/badge.svg)](https://codecov.io/gh/dannylong-math/cpp-template)
-[![Documentation](https://github.com/dannylong-math/cpp-template/actions/workflows/docs.yml/badge.svg?branch=main&event=push)](https://github.com/dannylong-math/cpp-template/actions/workflows/docs.yml)
+[![Unit tests](https://github.com/dannylong-math/FieldPack/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/dannylong-math/FieldPack/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/dannylong-math/FieldPack/graph/badge.svg)](https://codecov.io/gh/dannylong-math/FieldPack)
+[![Documentation](https://github.com/dannylong-math/FieldPack/actions/workflows/docs.yml/badge.svg?branch=main&event=push)](https://github.com/dannylong-math/FieldPack/actions/workflows/docs.yml)
 
 A C++23 header-only library template with Boost.UT tests, Google Benchmark,
 GCC/Clang CI, Codecov coverage, and Doxygen/Sourcey documentation published to

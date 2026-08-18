@@ -1,8 +1,8 @@
 import { defineConfig, doxygen, markdown } from "sourcey";
 
 export default defineConfig({
-  name: "MyProject",
-  repo: "https://github.com/dannylong-math/cpp-template",
+  name: "FieldPack",
+  repo: "https://github.com/dannylong-math/FieldPack",
   editBranch: "main",
   navigation: {
     tabs: [

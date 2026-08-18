@@ -3,7 +3,7 @@
 /**
  * @brief Small example API for validating the template workflow.
  */
-namespace my_project {
+namespace fieldpack {
 
 /**
  * @brief Add two integers.
@@ -14,4 +14,4 @@ namespace my_project {
  */
 [[nodiscard]] constexpr auto add(const int lhs, const int rhs) noexcept -> int { return lhs + rhs; }
 
-} // namespace my_project
+} // namespace fieldpack

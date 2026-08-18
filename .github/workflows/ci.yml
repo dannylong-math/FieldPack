@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Unit tests (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Delete this object when a project requires Clang (for example,
+          # because it uses Enzyme) and should no longer build with GCC.
+          - name: GCC
+            cc: gcc
+            cxx: g++
+          - name: Clang
+            cc: clang
+            cxx: clang++
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Configure
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: >-
+          cmake -S . -B build/ci -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DBUILD_TESTING=ON
+          -DBUILD_BENCHMARKS=OFF
+          -DENABLE_SANITIZERS=OFF
+
+      - name: Build
+        run: cmake --build build/ci --parallel 2
+
+      - name: Run unit tests
+        run: ctest --test-dir build/ci --output-on-failure
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Configure coverage build
+        env:
+          CC: clang
+          CXX: clang++
+        run: >-
+          cmake -S . -B build/coverage -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DBUILD_TESTING=ON
+          -DBUILD_BENCHMARKS=OFF
+          -DENABLE_SANITIZERS=OFF
+          -DENABLE_COVERAGE=ON
+
+      - name: Build
+        run: cmake --build build/coverage --parallel 2
+
+      - name: Run unit tests
+        run: ctest --test-dir build/coverage --output-on-failure
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Generate coverage report
+        run: |
+          python -m pip install gcovr==8.6
+          llvm_cov="$(clang -print-prog-name=llvm-cov)"
+          gcovr \
+            --root "${GITHUB_WORKSPACE}" \
+            --filter "${GITHUB_WORKSPACE}/include/" \
+            --exclude "${GITHUB_WORKSPACE}/build/" \
+            --gcov-executable "${llvm_cov} gcov" \
+            --xml-pretty \
+            --output coverage.xml \
+            build/coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          fail_ci_if_error: true

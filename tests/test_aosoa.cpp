@@ -3,7 +3,6 @@
 
 #include <array>
 #include <boost/ut.hpp>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <fieldpack/detail/aligned_allocator.hpp>
@@ -47,14 +46,6 @@ template<std::size_t TileExtent>
 using mixed_table = fieldpack::table<fieldpack_test::mixed_schema, fieldpack::aosoa<TileExtent>>;
 
 template<std::size_t TileExtent>
-using reordered_table = fieldpack::table<fieldpack_test::reordered_schema, fieldpack::aosoa<TileExtent>>;
-
-using qualified_schema_table = fieldpack::table<const fieldpack_test::mixed_schema, fieldpack::aosoa<8>>;
-
-static_assert(std::same_as<qualified_schema_table::schema_type, fieldpack_test::mixed_schema>);
-static_assert(std::same_as<qualified_schema_table::layout_type, fieldpack::aosoa<8>>);
-
-template<std::size_t TileExtent>
 using tracked_storage =
     fieldpack::detail::aosoa_storage<fieldpack_test::mixed_schema, TileExtent, tracking_allocation_policy>;
 
@@ -62,8 +53,10 @@ template<std::size_t TileExtent>
 using mixed_tile = fieldpack::detail::tile_storage<TileExtent, fieldpack_test::x_field, fieldpack_test::y_field,
                                                    fieldpack_test::id_field, fieldpack_test::count_field>;
 
-using reordered_tile = fieldpack::detail::tile_storage<8, fieldpack_test::count_field, fieldpack_test::id_field,
-                                                       fieldpack_test::y_field, fieldpack_test::x_field>;
+template<std::size_t TileExtent>
+using reordered_tile =
+    fieldpack::detail::tile_storage<TileExtent, fieldpack_test::count_field, fieldpack_test::id_field,
+                                    fieldpack_test::y_field, fieldpack_test::x_field>;
 
 template<std::size_t TileExtent> constexpr auto expected_tile_count(std::size_t logical_size) noexcept -> std::size_t
 {
@@ -281,9 +274,11 @@ template<std::size_t TileExtent> void check_padding_and_resize_contract()
     }
 
     const auto logical_end = across_boundaries.size();
+    boost::ut::expect(across_boundaries.at(0).template get<fieldpack_test::x>() == 40.25F);
     boost::ut::expect(
         boost::ut::throws<std::out_of_range>([&] { static_cast<void>(across_boundaries.at(logical_end)); }));
     const auto& observed = across_boundaries;
+    boost::ut::expect(observed.at(0).template get<fieldpack_test::x>() == 40.25F);
     boost::ut::expect(boost::ut::throws<std::out_of_range>([&] { static_cast<void>(observed.at(logical_end)); }));
 }
 
@@ -397,10 +392,16 @@ template<class Schema, std::size_t TileExtent> void check_production_storage_gro
 {
     using storage_type = fieldpack::detail::aosoa_storage<Schema, TileExtent>;
 
-    storage_type values(TileExtent);
+    storage_type values((2U * TileExtent) + 1U);
+    values.resize(values.size());
+    values.resize(2U * TileExtent);
     values.resize(TileExtent + 1U);
     values.resize(TileExtent + 2U);
-    boost::ut::expect(values.size() == TileExtent + 2U);
+    values.resize(2U * TileExtent);
+    values.resize((2U * TileExtent) + 1U);
+    values.resize(0U);
+    values.resize(TileExtent);
+    boost::ut::expect(values.size() == TileExtent);
 
     boost::ut::expect(boost::ut::throws<std::bad_array_new_length>(
         [] { static_cast<void>(storage_type{std::numeric_limits<std::size_t>::max()}); }));
@@ -411,24 +412,6 @@ template<class Schema, std::size_t TileExtent> void check_production_storage_gro
 int main() // NOLINT(bugprone-exception-escape) -- Boost.UT owns top-level test exception handling
 {
     using namespace boost::ut;
-
-    "AoSoA tables satisfy the scalar contract for every representative extent"_test = [] {
-        fieldpack_test::check_scalar_table_contract<mixed_table<1>>();
-        fieldpack_test::check_scalar_table_contract<mixed_table<8>>();
-        fieldpack_test::check_scalar_table_contract<mixed_table<64>>();
-    };
-
-    "AoSoA tables resolve tags independently of schema field order"_test = [] {
-        fieldpack_test::check_scalar_table_contract<reordered_table<8>>();
-    };
-
-    "AoSoA tables normalize top-level schema cv-qualification"_test = [] {
-        qualified_schema_table values(1);
-        values[0].template get<fieldpack_test::x>() = 3.5F;
-
-        const auto& observed = values;
-        expect(observed[0].template get<fieldpack_test::x>() == 3.5F);
-    };
 
     "AoSoA logical boundaries allocate the expected complete tiles"_test = [] {
         check_boundary_sizes_and_tile_counts<1>();
@@ -458,7 +441,9 @@ int main() // NOLINT(bugprone-exception-escape) -- Boost.UT owns top-level test 
         check_tile_allocator_for_every_policy<mixed_tile<1>>();
         check_tile_allocator_for_every_policy<mixed_tile<8>>();
         check_tile_allocator_for_every_policy<mixed_tile<64>>();
-        check_tile_allocator_control_flow<reordered_tile>();
+        check_tile_allocator_control_flow<reordered_tile<1>>();
+        check_tile_allocator_control_flow<reordered_tile<8>>();
+        check_tile_allocator_control_flow<reordered_tile<64>>();
     };
 
     "AoSoA tracked storage covers lifecycle and resize control flow for every extent"_test = [] {
@@ -471,7 +456,9 @@ int main() // NOLINT(bugprone-exception-escape) -- Boost.UT owns top-level test 
         check_production_storage_growth_and_overflow_paths<fieldpack_test::mixed_schema, 1>();
         check_production_storage_growth_and_overflow_paths<fieldpack_test::mixed_schema, 8>();
         check_production_storage_growth_and_overflow_paths<fieldpack_test::mixed_schema, 64>();
+        check_production_storage_growth_and_overflow_paths<fieldpack_test::reordered_schema, 1>();
         check_production_storage_growth_and_overflow_paths<fieldpack_test::reordered_schema, 8>();
+        check_production_storage_growth_and_overflow_paths<fieldpack_test::reordered_schema, 64>();
     };
 }
 

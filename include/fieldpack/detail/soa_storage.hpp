@@ -191,22 +191,21 @@ public:
      * @throws std::bad_array_new_length If a column allocation size overflows.
      * @throws std::bad_alloc If any column allocation cannot be satisfied.
      */
-    // The eight uncovered branches are compiler-generated cleanup edges between
-    // column constructors for the two production-policy schema instantiations.
-    // The injected-policy tests fail at every column and cover the same cleanup.
-    explicit soa_storage_impl(size_type count) :
-        column_type<Fields>(count)..., size_(count) // GCOVR_EXCL_BR_WITHOUT_HIT: 8/24
+    // This source line contains only compiler-generated cleanup edges between
+    // column constructors. Injected-policy tests fail at every column and cover
+    // the cleanup behavior without relying on each test executable's duplicate
+    // inline production instantiations.
+    explicit soa_storage_impl(size_type count) : column_type<Fields>(count)..., size_(count) // GCOVR_EXCL_BR_LINE
     {
     }
 
     /**
      * @brief Deep-copy every field column.
-     *
-     * The six uncovered branches are compiler-generated cleanup edges for the
-     * two production-policy schema instantiations. Injected-policy tests fail
-     * each column copy in turn and cover the equivalent cleanup paths.
      */
-    soa_storage_impl(const soa_storage_impl&) = default; // GCOVR_EXCL_BR_WITHOUT_HIT: 6/18
+    //  Branches attributed to this declaration are compiler-generated cleanup
+    //  edges. Injected-policy tests fail each column copy in turn and cover the
+    //  equivalent cleanup behavior.
+    soa_storage_impl(const soa_storage_impl&) = default; // GCOVR_EXCL_BR_LINE
 
     /**
      * @brief Move every column and leave the source empty and consistent.

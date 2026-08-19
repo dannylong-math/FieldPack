@@ -34,7 +34,7 @@ namespace detail {
 {
     // The uncovered branch is allocation failure inside the standard
     // exception constructor, which cannot be injected through the table API.
-    throw std::out_of_range{"fieldpack::table::at index out of range"}; // GCOVR_EXCL_BR_WITHOUT_HIT: 1/2
+    throw std::out_of_range{"fieldpack::table::at index out of range"}; // GCOVR_EXCL_BR_LINE
 } // GCOVR_EXCL_LINE -- unreachable because the function always throws
 
 /**

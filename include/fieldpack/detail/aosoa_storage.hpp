@@ -6,6 +6,7 @@
 #include <fieldpack/detail/field_storage.hpp>
 #include <fieldpack/schema.hpp>
 #include <new>
+#include <span>
 #include <type_traits>
 #include <utility>
 
@@ -226,6 +227,92 @@ public:
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         const auto& tile = tiles_[tile_index(index)];
         return field_lane<Tag>(tile, lane_index(index));
+    }
+
+    /**
+     * @brief Return the live contiguous count within the current tile.
+     *
+     * At the logical end the result is zero. Otherwise it is limited by both
+     * the remaining live values and the current physical tile boundary. The
+     * caller supplies an index no greater than @ref size.
+     *
+     * @param index Logical starting index.
+     * @return Live values available without crossing a physical tile.
+     */
+    [[nodiscard]] auto contiguous_count(size_type index) const noexcept -> size_type
+    {
+        if (index == logical_size_) {
+            return 0U;
+        }
+        return std::min(logical_size_ - index, TileExtent - lane_index(index));
+    }
+
+    /**
+     * @brief Form a mutable named-field span inside one physical tile.
+     *
+     * The execution layer guarantees `first < size()` and
+     * `count <= contiguous_count(first)`, preventing exposure of padding or a
+     * range crossing a tile boundary.
+     *
+     * @tparam Tag Exact tag present in @ref schema_type.
+     * @tparam Extent Static span extent or `std::dynamic_extent`.
+     * @param first First logical index in the span.
+     * @param count Number of live values exposed by the span.
+     * @return Mutable span over the selected tile field lanes.
+     */
+    template<class Tag, std::size_t Extent = std::dynamic_extent>
+        requires contains_tag_v<schema_type, Tag>
+    [[nodiscard]] auto contiguous_span(size_type first,
+                                       size_type count) noexcept -> std::span<field_type_t<schema_type, Tag>, Extent>
+    {
+        if constexpr (Extent == std::dynamic_extent) {
+            // Tests cover empty and live dynamic spans. Fixed-span template
+            // copies add unreachable standard-library contract arcs here.
+            if (count == 0U) { // GCOVR_EXCL_BR_LINE
+                return {};
+            }
+        }
+
+        // The executor requests a non-empty range in one allocated tile.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        auto& tile = tiles_[tile_index(first)];
+        auto& values = static_cast<selected_tile_field<Tag>&>(tile).values;
+        return std::span<field_type_t<schema_type, Tag>, Extent>{
+            std::span<field_type_t<schema_type, Tag>>{values}.subspan(lane_index(first), count)};
+    }
+
+    /**
+     * @brief Form an immutable named-field span inside one physical tile.
+     *
+     * The execution layer guarantees `first < size()` and
+     * `count <= contiguous_count(first)`, preventing exposure of padding or a
+     * range crossing a tile boundary.
+     *
+     * @tparam Tag Exact tag present in @ref schema_type.
+     * @tparam Extent Static span extent or `std::dynamic_extent`.
+     * @param first First logical index in the span.
+     * @param count Number of live values exposed by the span.
+     * @return Const span over the selected tile field lanes.
+     */
+    template<class Tag, std::size_t Extent = std::dynamic_extent>
+        requires contains_tag_v<schema_type, Tag>
+    [[nodiscard]] auto contiguous_span(size_type first, size_type count) const noexcept
+        -> std::span<const field_type_t<schema_type, Tag>, Extent>
+    {
+        if constexpr (Extent == std::dynamic_extent) {
+            // Tests cover empty and live dynamic spans. Fixed-span template
+            // copies add unreachable standard-library contract arcs here.
+            if (count == 0U) { // GCOVR_EXCL_BR_LINE
+                return {};
+            }
+        }
+
+        // The executor requests a non-empty range in one allocated tile.
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        const auto& tile = tiles_[tile_index(first)];
+        const auto& values = static_cast<const selected_tile_field<Tag>&>(tile).values;
+        return std::span<const field_type_t<schema_type, Tag>, Extent>{
+            std::span<const field_type_t<schema_type, Tag>>{values}.subspan(lane_index(first), count)};
     }
 
     /**

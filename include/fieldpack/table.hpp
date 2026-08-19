@@ -22,6 +22,15 @@ namespace fieldpack {
 namespace detail {
 
 /**
+ * @brief Grant the execution layer narrow access to a table's backend.
+ *
+ * The complete definition lives in `execution.hpp`, after @ref table is
+ * complete. Keeping this bridge in the detail namespace avoids making raw
+ * storage a public table operation.
+ */
+struct table_access;
+
+/**
  * @brief Throw the common exception for an invalid checked table index.
  *
  * Keeping exception construction outside the templated table facade avoids
@@ -166,6 +175,9 @@ template<class Schema, class Layout>
     requires valid_schema<Schema> && valid_layout<Layout>
 class table {
 private:
+    /** @brief Permit the common executor to obtain the selected backend. */
+    friend struct detail::table_access;
+
     /** @brief Internal backend selected from the public layout tag. */
     using storage_type = detail::table_storage_t<Schema, Layout>;
 

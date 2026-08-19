@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <fieldpack/detail/field_storage.hpp>
 #include <fieldpack/schema.hpp>
+#include <span>
 #include <type_traits>
 #include <utility>
 
@@ -86,6 +87,34 @@ public:
     [[nodiscard]] auto element(std::size_t index) const noexcept -> const value_type&
     {
         return values_[index]; // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    }
+
+    /**
+     * @brief Form a mutable span over a validated contiguous subrange.
+     *
+     * @tparam Extent Static span extent or `std::dynamic_extent`.
+     * @param first First element in the column subrange.
+     * @param count Number of elements in the subrange.
+     * @return Mutable span over exactly @p count values.
+     */
+    template<std::size_t Extent>
+    [[nodiscard]] auto span(std::size_t first, std::size_t count) noexcept -> std::span<value_type, Extent>
+    {
+        return std::span<value_type, Extent>{std::span<value_type>{values_}.subspan(first, count)};
+    }
+
+    /**
+     * @brief Form an immutable span over a validated contiguous subrange.
+     *
+     * @tparam Extent Static span extent or `std::dynamic_extent`.
+     * @param first First element in the column subrange.
+     * @param count Number of elements in the subrange.
+     * @return Const span over exactly @p count values.
+     */
+    template<std::size_t Extent>
+    [[nodiscard]] auto span(std::size_t first, std::size_t count) const noexcept -> std::span<const value_type, Extent>
+    {
+        return std::span<const value_type, Extent>{std::span<const value_type>{values_}.subspan(first, count)};
     }
 
     /**
@@ -296,6 +325,57 @@ public:
     [[nodiscard]] auto element(size_type index) const noexcept -> const field_type_t<schema_type, Tag>&
     {
         return static_cast<const selected_column<Tag>&>(*this).element(index);
+    }
+
+    /**
+     * @brief Return the live contiguous count beginning at an index.
+     *
+     * Every SoA field is one complete logical column. The caller supplies an
+     * index no greater than @ref size.
+     *
+     * @param index Logical starting index.
+     * @return Number of live values from @p index through the column end.
+     */
+    [[nodiscard]] auto contiguous_count(size_type index) const noexcept -> size_type { return size_ - index; }
+
+    /**
+     * @brief Form a mutable named-field span within one contiguous region.
+     *
+     * The execution layer guarantees `first <= size()` and
+     * `count <= contiguous_count(first)`.
+     *
+     * @tparam Tag Exact tag present in @ref schema_type.
+     * @tparam Extent Static span extent or `std::dynamic_extent`.
+     * @param first First logical index in the span.
+     * @param count Number of live values exposed by the span.
+     * @return Mutable span over the named SoA column.
+     */
+    template<class Tag, std::size_t Extent = std::dynamic_extent>
+        requires contains_tag_v<schema_type, Tag>
+    [[nodiscard]] auto contiguous_span(size_type first,
+                                       size_type count) noexcept -> std::span<field_type_t<schema_type, Tag>, Extent>
+    {
+        return static_cast<selected_column<Tag>&>(*this).template span<Extent>(first, count);
+    }
+
+    /**
+     * @brief Form an immutable named-field span within one contiguous region.
+     *
+     * The execution layer guarantees `first <= size()` and
+     * `count <= contiguous_count(first)`.
+     *
+     * @tparam Tag Exact tag present in @ref schema_type.
+     * @tparam Extent Static span extent or `std::dynamic_extent`.
+     * @param first First logical index in the span.
+     * @param count Number of live values exposed by the span.
+     * @return Const span over the named SoA column.
+     */
+    template<class Tag, std::size_t Extent = std::dynamic_extent>
+        requires contains_tag_v<schema_type, Tag>
+    [[nodiscard]] auto contiguous_span(size_type first, size_type count) const noexcept
+        -> std::span<const field_type_t<schema_type, Tag>, Extent>
+    {
+        return static_cast<const selected_column<Tag>&>(*this).template span<Extent>(first, count);
     }
 
     /**

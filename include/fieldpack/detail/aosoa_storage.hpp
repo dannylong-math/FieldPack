@@ -262,8 +262,8 @@ public:
      */
     template<class Tag, std::size_t Extent = std::dynamic_extent>
         requires contains_tag_v<schema_type, Tag>
-    [[nodiscard]] auto contiguous_span(size_type first,
-                                       size_type count) noexcept -> std::span<field_type_t<schema_type, Tag>, Extent>
+    [[nodiscard]] auto contiguous_span(size_type first, size_type count) noexcept
+        -> std::span<field_type_t<schema_type, Tag>, Extent>
     {
         if constexpr (Extent == std::dynamic_extent) {
             // Tests cover empty and live dynamic spans. Fixed-span template
@@ -402,8 +402,8 @@ private:
 
     /** @brief Select one immutable named field lane from a complete tile. */
     template<class Tag>
-    [[nodiscard]] static auto field_lane(const tile_type& tile,
-                                         size_type lane) noexcept -> const field_type_t<schema_type, Tag>&
+    [[nodiscard]] static auto field_lane(const tile_type& tile, size_type lane) noexcept
+        -> const field_type_t<schema_type, Tag>&
     {
         const auto& field_values = static_cast<const selected_tile_field<Tag>&>(tile).values;
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,cppcoreguidelines-pro-bounds-constant-array-index)

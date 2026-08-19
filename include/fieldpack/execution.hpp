@@ -377,8 +377,8 @@ template<std::size_t Extent, class Access, class Storage>
  * @brief Construct a named bundle over one validated contiguous range.
  */
 template<std::size_t Extent, class... Access, class Storage>
-[[nodiscard]] constexpr auto make_chunk_view(Storage& storage, std::size_t first,
-                                             std::size_t count) noexcept -> chunk_view_t<Storage, Extent, Access...>
+[[nodiscard]] constexpr auto make_chunk_view(Storage& storage, std::size_t first, std::size_t count) noexcept
+    -> chunk_view_t<Storage, Extent, Access...>
 {
     return {count, make_access_span<Extent, Access>(storage, first, count)...};
 }

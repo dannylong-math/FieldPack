@@ -20,7 +20,7 @@ namespace fieldpack {
  * A tag is a C++ type used as the field's name. FieldPack compares tags by
  * exact type identity, so unrelated types with the same spelling remain
  * distinct. The descriptor itself is intentionally unconstrained so that
- * invalid descriptions can be inspected with @ref valid_field.
+ * invalid descriptions can be inspected with @ref fieldpack::valid_field.
  *
  * @tparam Tag Exact type used to identify the field.
  * @tparam T Value type associated with @p Tag.
@@ -50,8 +50,8 @@ template<class Tag, class T> struct field {
  * metadata without changing the result of @ref field_type_t for any tag.
  *
  * This primary descriptor remains formable for empty, malformed, or
- * duplicate field lists. Use @ref valid_schema to decide whether consumers
- * may use a description.
+ * duplicate field lists. Use @ref fieldpack::valid_schema to decide whether
+ * consumers may use a description.
  *
  * @tparam Fields Candidate field descriptors in their declared order.
  *
@@ -241,7 +241,8 @@ struct valid_schema_impl<schema<Fields...>> : std::bool_constant<valid_schema_fi
  * @brief Primary declaration for metadata available only on schemas.
  *
  * The primary template is intentionally incomplete. Public consumers are
- * constrained by @ref valid_schema before instantiating its specialization.
+ * constrained by @ref fieldpack::valid_schema before instantiating its
+ * specialization.
  *
  * @tparam Schema Unqualified schema type.
  */
@@ -447,7 +448,10 @@ inline constexpr std::size_t field_index_v = schema_field_index_impl<std::remove
  * @tparam First First field still under consideration.
  * @tparam Rest Remaining fields.
  */
-template<std::size_t Index, class First, class... Rest> struct field_at_impl : field_at_impl<Index - 1, Rest...> {};
+template<std::size_t Index, class First, class... Rest> struct field_at_impl {
+    /** @brief Field descriptor selected after skipping @p Index entries. */
+    using type = typename field_at_impl<Index - 1, Rest...>::type;
+};
 
 /**
  * @brief Return the field at the current position.
@@ -496,9 +500,10 @@ template<class Schema, class Tag> struct field_type_impl {
 /**
  * @brief Value type associated with an exact tag in a valid schema.
  *
- * The alias is available only when @p Schema satisfies @ref valid_schema and
- * contains @p Tag. An unknown tag therefore fails a `requires` expression
- * cleanly instead of instantiating recursive lookup machinery.
+ * The alias is available only when @p Schema satisfies
+ * @ref fieldpack::valid_schema and contains @p Tag. An unknown tag therefore
+ * fails a `requires` expression cleanly instead of instantiating recursive
+ * lookup machinery.
  *
  * @tparam Schema Valid schema type to inspect.
  * @tparam Tag Exact tag type whose value type is requested.

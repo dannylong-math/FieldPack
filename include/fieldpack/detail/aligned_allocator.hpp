@@ -176,7 +176,11 @@ public:
         if (count == 0) {
             return nullptr;
         }
-        if (count > max_size()) {
+        // The four uncovered branch instances correspond to the one-byte
+        // value types char, signed char, unsigned char, and char8_t. For these
+        // types max_size() is SIZE_MAX, so no size_type value can exceed it.
+        // Overflow behavior for every wider supported type remains covered.
+        if (count > max_size()) { // GCOVR_EXCL_BR_WITHOUT_HIT: 4/38
             throw std::bad_array_new_length{};
         }
 

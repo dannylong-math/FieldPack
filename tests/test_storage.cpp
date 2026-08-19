@@ -91,6 +91,28 @@ template<class T> void check_aligned_allocation()
     allocator.deallocate(allocation, count);
 }
 
+template<class T> void check_allocator_boundaries()
+{
+    using allocator_type = fieldpack::detail::aligned_allocator<T>;
+    using size_type = allocator_type::size_type;
+
+    allocator_type allocator;
+
+    auto* empty_allocation = allocator.allocate(0);
+    boost::ut::expect(empty_allocation == nullptr);
+    allocator.deallocate(empty_allocation, 0);
+
+    constexpr auto largest_count = allocator_type::max_size();
+    constexpr auto largest_size = std::numeric_limits<size_type>::max();
+    static_assert(largest_count == largest_size / sizeof(T));
+
+    if constexpr (largest_count < largest_size) {
+        constexpr auto overflowing_count = largest_count + 1U;
+        boost::ut::expect(boost::ut::throws<std::bad_array_new_length>(
+            [&] { static_cast<void>(allocator.allocate(overflowing_count)); }));
+    }
+}
+
 template<class T> void check_value_initialized_field_storage()
 {
     constexpr std::size_t count = 13;
@@ -150,6 +172,14 @@ int main()
         allocator.deallocate(nullptr, 0);
         expect(tracking_allocation_policy::deallocations == 0U);
         expect(tracking_allocation_policy::live_allocations == 0U);
+
+        constexpr auto overflowing_count = allocator_type::max_size() + 1U;
+        expect(throws<std::bad_array_new_length>([&] { static_cast<void>(allocator.allocate(overflowing_count)); }));
+        expect(tracking_allocation_policy::allocation_attempts == 0U);
+    };
+
+    "allocator boundary branches are exercised for every supported arithmetic type"_test = [] {
+        for_each_supported_arithmetic_type([]<class T> { check_allocator_boundaries<T>(); });
     };
 
     "allocations of every supported arithmetic type are 64-byte aligned"_test = [] {

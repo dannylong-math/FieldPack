@@ -1,6 +1,7 @@
 #pragma once // NOLINT(portability-avoid-pragma-once) -- project-wide header convention
 
 #include <cstddef>
+#include <fieldpack/detail/aosoa_storage.hpp>
 #include <fieldpack/detail/soa_storage.hpp>
 #include <fieldpack/layout.hpp>
 #include <fieldpack/schema.hpp>
@@ -19,6 +20,22 @@ namespace fieldpack {
  * @brief Internal scalar-access machinery shared by table layouts.
  */
 namespace detail {
+
+/**
+ * @brief Throw the common exception for an invalid checked table index.
+ *
+ * Keeping exception construction outside the templated table facade avoids
+ * duplicating its cold allocation and unwinding path for every schema/layout
+ * combination.
+ *
+ * @throws std::out_of_range Unconditionally.
+ */
+[[noreturn]] inline void throw_table_index_out_of_range()
+{
+    // The uncovered branch is allocation failure inside the standard
+    // exception constructor, which cannot be injected through the table API.
+    throw std::out_of_range{"fieldpack::table::at index out of range"}; // GCOVR_EXCL_BR_LINE
+} // GCOVR_EXCL_LINE -- unreachable because the function always throws
 
 /**
  * @brief Non-owning view of one logical record in a storage backend.
@@ -88,31 +105,50 @@ private:
     size_type index_;
 };
 
-} // namespace detail
-
 /**
- * @brief Primary declaration for an owning table selected by storage layout.
+ * @brief Primary declaration mapping a public layout to its storage backend.
  *
- * Layout-specific partial specializations provide the implementation. Both
- * template arguments are constrained so invalid schemas and unknown layouts
- * fail before backend machinery is instantiated.
+ * Recognized layout specializations keep backend selection separate from the
+ * common owning table facade.
  *
  * @tparam Schema Valid logical field schema.
  * @tparam Layout Recognized storage-layout tag.
  */
-template<class Schema, class Layout>
-    requires valid_schema<Schema> && valid_layout<Layout>
-class table;
+template<class Schema, class Layout> struct table_storage;
+
+/** @brief Select generated column storage for the SoA layout. */
+template<class Schema> struct table_storage<Schema, soa> {
+    /** @brief Internal structure-of-arrays backend. */
+    using type = soa_storage<Schema>;
+};
+
+/** @brief Select generated complete-tile storage for an AoSoA layout. */
+template<class Schema, std::size_t TileExtent> struct table_storage<Schema, aosoa<TileExtent>> {
+    /** @brief Internal homogeneous AoSoA backend. */
+    using type = aosoa_storage<Schema, TileExtent>;
+};
 
 /**
- * @brief Own a structure-of-arrays representation of a logical schema.
+ * @brief Resolve the internal backend associated with a public layout.
  *
- * One separately aligned contiguous column is generated for every field.
- * Scalar access returns a small row proxy whose `get<Tag>()` member aliases
- * the corresponding column value. Top-level cv-qualification on @p Schema is
- * accepted and normalized away.
+ * @tparam Schema Valid logical field schema.
+ * @tparam Layout Recognized storage-layout tag.
+ */
+template<class Schema, class Layout> using table_storage_t = table_storage<Schema, Layout>::type;
+
+} // namespace detail
+
+/**
+ * @brief Own a named-field table using a selected physical storage layout.
+ *
+ * The facade provides identical scalar semantics for every recognized layout.
+ * An internal selector supplies either separately allocated SoA columns or a
+ * single allocation of complete AoSoA tiles. Scalar access returns a small row
+ * proxy whose `get<Tag>()` member aliases the corresponding backend value.
+ * Top-level cv-qualification on @p Schema is accepted and normalized away.
  *
  * @tparam Schema Valid schema, optionally top-level cv-qualified.
+ * @tparam Layout Recognized storage-layout tag.
  *
  * @code{.cpp}
  * struct x {};
@@ -121,24 +157,24 @@ class table;
  *     fieldpack::field<x, float>,
  *     fieldpack::field<id, unsigned>>;
  *
- * fieldpack::table<particle_schema, fieldpack::soa> particles(8);
+ * fieldpack::table<particle_schema, fieldpack::aosoa<64>> particles(8);
  * particles[2].get<x>() = 3.5F;
  * particles.at(2).get<id>() = 42U;
  * @endcode
  */
-template<class Schema>
-    requires valid_schema<Schema>
-class table<Schema, soa> {
+template<class Schema, class Layout>
+    requires valid_schema<Schema> && valid_layout<Layout>
+class table {
 private:
-    /** @brief Internal generated column backend. */
-    using storage_type = detail::soa_storage<Schema>;
+    /** @brief Internal backend selected from the public layout tag. */
+    using storage_type = detail::table_storage_t<Schema, Layout>;
 
 public:
     /** @brief Unqualified logical schema stored by this table. */
     using schema_type = std::remove_cv_t<Schema>;
 
-    /** @brief Layout tag selecting this specialization. */
-    using layout_type = soa;
+    /** @brief Layout tag selecting the physical storage backend. */
+    using layout_type = Layout;
 
     /** @brief Unsigned type used for element counts and indices. */
     using size_type = std::size_t;
@@ -149,23 +185,24 @@ public:
     /** @brief Immutable non-owning logical row reference. */
     using const_reference = detail::row_proxy<const storage_type>;
 
-    /** @brief Construct an empty table without allocating any column. */
+    /** @brief Construct an empty table without allocating backend storage. */
     table() = default;
 
     /**
-     * @brief Construct equally sized, value-initialized field columns.
+     * @brief Construct value-initialized storage for logical records.
      *
      * @param count Number of logical records to create.
-     * @throws std::bad_array_new_length If a column allocation size overflows.
-     * @throws std::bad_alloc If any column allocation cannot be satisfied.
+     * @throws std::bad_array_new_length If a backend allocation size
+     * overflows.
+     * @throws std::bad_alloc If backend storage cannot be allocated.
      */
     explicit table(size_type count) : storage_(count) {}
 
-    /** @brief Deep-copy all columns into independent storage. */
+    /** @brief Deep-copy all logical values into independent storage. */
     table(const table&) = default;
 
     /**
-     * @brief Move all column allocations and leave the source valid.
+     * @brief Move backend allocations and leave the source valid.
      *
      * The moved-from table remains destructible and assignable. Its precise
      * observable state is intentionally not part of the public contract.
@@ -186,13 +223,13 @@ public:
      */
     auto operator=(table&&) noexcept -> table& = default;
 
-    /** @brief Destroy all logical values and release every column allocation. */
+    /** @brief Destroy all logical values and release backend allocations. */
     ~table() = default;
 
     /**
      * @brief Return the number of live logical records.
      *
-     * @return Shared size of every field column.
+     * @return Logical size independent of physical layout or padding.
      */
     [[nodiscard]] auto size() const noexcept -> size_type { return storage_.size(); }
 
@@ -249,7 +286,7 @@ public:
     }
 
     /**
-     * @brief Change the logical record count of every field column.
+     * @brief Change the logical record count of the selected backend.
      *
      * The first `min(old_size, new_size)` records are preserved. Newly live
      * fields are value-initialized. A failed growth leaves this table's size,
@@ -259,7 +296,8 @@ public:
      * @param new_size Requested logical record count.
      * @throws std::bad_array_new_length If a replacement allocation size
      * overflows.
-     * @throws std::bad_alloc If any replacement column cannot be allocated.
+     * @throws std::bad_alloc If replacement backend storage cannot be
+     * allocated.
      */
     void resize(size_type new_size) { storage_.resize(new_size); }
 
@@ -273,15 +311,11 @@ private:
     void check_index(size_type index) const
     {
         if (index >= size()) {
-            // Clang emits one branch per table instantiation for failure while
-            // constructing std::out_of_range. That standard-library allocation
-            // failure cannot be injected through the table API. Tests cover both
-            // index-check outcomes and successful propagation of this exception.
-            throw std::out_of_range{"fieldpack::table::at index out of range"}; // GCOVR_EXCL_BR_WITHOUT_HIT: 2/4
+            detail::throw_table_index_out_of_range();
         }
     }
 
-    /** @brief Generated aligned columns holding every logical field value. */
+    /** @brief Layout-selected storage holding every logical field value. */
     storage_type storage_{};
 };
 

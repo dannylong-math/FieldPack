@@ -1,6 +1,7 @@
 #pragma once // NOLINT(portability-avoid-pragma-once) -- project-wide header convention
 
 #include <concepts>
+#include <cstddef>
 #include <type_traits>
 
 /**
@@ -21,6 +22,23 @@ namespace fieldpack {
  * @endcode
  */
 struct soa {};
+
+/**
+ * @brief Select homogeneous array-of-structures-of-arrays storage.
+ *
+ * Each physical tile contains @p TileExtent consecutive values for every
+ * schema field. The table retains a separate logical size, so the final tile
+ * may contain padding that scalar access never exposes.
+ *
+ * @tparam TileExtent Positive number of values for each field in one tile.
+ *
+ * @code{.cpp}
+ * using particles = fieldpack::table<particle_schema, fieldpack::aosoa<64>>;
+ * @endcode
+ */
+template<std::size_t TileExtent>
+    requires(TileExtent > 0U)
+struct aosoa {};
 
 /**
  * @brief Implementation machinery for recognizing layout tags.
@@ -47,6 +65,19 @@ template<class Layout> struct layout_traits_impl;
 template<> struct layout_traits_impl<soa> {
     /** @brief SoA columns are not divided into physical tiles. */
     static constexpr bool is_tiled = false;
+};
+
+/**
+ * @brief Metadata for a homogeneous AoSoA layout.
+ *
+ * @tparam TileExtent Positive physical field-array extent.
+ */
+template<std::size_t TileExtent> struct layout_traits_impl<aosoa<TileExtent>> {
+    /** @brief AoSoA storage is divided into fixed-size physical tiles. */
+    static constexpr bool is_tiled = true;
+
+    /** @brief Number of values for each field in one physical tile. */
+    static constexpr std::size_t tile_extent = TileExtent;
 };
 
 } // namespace detail

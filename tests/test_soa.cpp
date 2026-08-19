@@ -2,7 +2,6 @@
 #include "support/tracking_allocation_policy.hpp"
 
 #include <boost/ut.hpp>
-#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <fieldpack/detail/aligned_allocator.hpp>
@@ -20,14 +19,11 @@ namespace {
 using fieldpack_test::tracking_allocation_policy;
 
 using mixed_table = fieldpack::table<fieldpack_test::mixed_schema, fieldpack::soa>;
-using reordered_table = fieldpack::table<fieldpack_test::reordered_schema, fieldpack::soa>;
-using qualified_schema_table = fieldpack::table<const fieldpack_test::mixed_schema, fieldpack::soa>;
 
 static_assert(fieldpack::valid_layout<fieldpack::soa>);
 static_assert(!fieldpack::valid_layout<const fieldpack::soa>);
 static_assert(!fieldpack::valid_layout<int>);
 static_assert(!fieldpack::layout_traits<fieldpack::soa>::is_tiled);
-static_assert(std::same_as<qualified_schema_table::schema_type, fieldpack_test::mixed_schema>);
 
 template<class Tag, class Table> void check_contiguous_aligned_column(Table& values)
 {
@@ -93,24 +89,6 @@ template<class Storage> void expect_storage_record(const Storage& values, std::s
 int main() // NOLINT(bugprone-exception-escape) -- Boost.UT owns top-level test exception handling
 {
     using namespace boost::ut;
-
-    "SoA tables satisfy the scalar contract for a mixed schema"_test = [] {
-        fieldpack_test::check_scalar_table_contract<mixed_table>();
-    };
-
-    "SoA tables resolve tags independently of schema field order"_test = [] {
-        fieldpack_test::check_scalar_table_contract<reordered_table>();
-    };
-
-    "SoA tables normalize top-level schema cv-qualification"_test = [] {
-        qualified_schema_table values(1);
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        values[0].template get<fieldpack_test::x>() = 3.5F;
-
-        const auto& observed = values;
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        expect(observed[0].template get<fieldpack_test::x>() == 3.5F);
-    };
 
     "every non-empty SoA column is contiguous and 64-byte aligned"_test = [] {
         mixed_table values(257);

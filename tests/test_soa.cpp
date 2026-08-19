@@ -56,6 +56,13 @@ struct tracking_allocation_policy {
 
 using mixed_table = fieldpack::table<fieldpack_test::mixed_schema, fieldpack::soa>;
 using reordered_table = fieldpack::table<fieldpack_test::reordered_schema, fieldpack::soa>;
+using qualified_schema_table = fieldpack::table<const fieldpack_test::mixed_schema, fieldpack::soa>;
+
+static_assert(fieldpack::valid_layout<fieldpack::soa>);
+static_assert(!fieldpack::valid_layout<const fieldpack::soa>);
+static_assert(!fieldpack::valid_layout<int>);
+static_assert(!fieldpack::layout_traits<fieldpack::soa>::is_tiled);
+static_assert(std::same_as<typename qualified_schema_table::schema_type, fieldpack_test::mixed_schema>);
 
 template<class Tag, class Table> void check_contiguous_aligned_column(Table& values)
 {
@@ -99,6 +106,14 @@ int main()
 
     "SoA tables resolve tags independently of schema field order"_test = [] {
         fieldpack_test::check_scalar_table_contract<reordered_table>();
+    };
+
+    "SoA tables normalize top-level schema cv-qualification"_test = [] {
+        qualified_schema_table values(1);
+        values[0].template get<fieldpack_test::x>() = 3.5F;
+
+        const auto& observed = values;
+        expect(observed[0].template get<fieldpack_test::x>() == 3.5F);
     };
 
     "every non-empty SoA column is contiguous and 64-byte aligned"_test = [] {

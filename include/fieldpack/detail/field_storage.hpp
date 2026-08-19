@@ -1,4 +1,4 @@
-#pragma once
+#pragma once // NOLINT(portability-avoid-pragma-once) -- project-wide header convention
 
 #include <fieldpack/detail/aligned_allocator.hpp>
 #include <vector>

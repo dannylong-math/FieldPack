@@ -15,6 +15,7 @@ Checks: >
   -misc-non-private-member-variables-in-classes
 
 WarningsAsErrors: ""
-HeaderFilterRegex: "include/.*"
+HeaderFilterRegex: "(^|.*/)(include/fieldpack|tests)/.*"
+ExcludeHeaderFilterRegex: ".*/build/.*"
 FormatStyle: file
 ...

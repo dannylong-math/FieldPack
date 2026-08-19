@@ -1,4 +1,4 @@
-#pragma once
+#pragma once // NOLINT(portability-avoid-pragma-once) -- project-wide header convention
 
 #include <concepts>
 #include <cstddef>
@@ -445,7 +445,7 @@ inline constexpr std::size_t field_index_v = schema_field_index_impl<std::remove
  */
 template<std::size_t Index, class First, class... Rest> struct field_at_impl {
     /** @brief Field descriptor selected after skipping @p Index entries. */
-    using type = typename field_at_impl<Index - 1, Rest...>::type;
+    using type = field_at_impl<Index - 1, Rest...>::type;
 };
 
 /**
@@ -484,10 +484,10 @@ struct schema_field_at_impl<schema<Fields...>, Index> : field_at_impl<Index, Fie
  */
 template<class Schema, class Tag> struct field_type_impl {
     /** @brief Field descriptor selected by the tag's declaration index. */
-    using selected_field = typename schema_field_at_impl<Schema, field_index_v<Schema, Tag>>::type;
+    using selected_field = schema_field_at_impl<Schema, field_index_v<Schema, Tag>>::type;
 
     /** @brief Value type extracted from @ref selected_field. */
-    using type = typename field_traits<selected_field>::type;
+    using type = field_traits<selected_field>::type;
 };
 
 } // namespace detail
@@ -519,6 +519,6 @@ template<class Schema, class Tag> struct field_type_impl {
  */
 template<class Schema, class Tag>
     requires(valid_schema<Schema> && contains_tag_v<Schema, Tag>)
-using field_type_t = typename detail::field_type_impl<std::remove_cv_t<Schema>, Tag>::type;
+using field_type_t = detail::field_type_impl<std::remove_cv_t<Schema>, Tag>::type;
 
 } // namespace fieldpack

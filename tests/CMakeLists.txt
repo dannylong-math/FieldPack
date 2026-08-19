@@ -6,6 +6,11 @@ FetchContent_Declare(ut
 )
 FetchContent_MakeAvailable(ut)
 
+# Boost.UT is a third-party dependency. Treat its headers as system headers so
+# compiler and clang-tidy diagnostics remain scoped to FieldPack-owned code.
+get_target_property(ut_include_directories ut INTERFACE_INCLUDE_DIRECTORIES)
+set_property(TARGET ut PROPERTY INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${ut_include_directories}")
+
 # CONFIGURE_DEPENDS: cmake reruns glob if files are added/removed
 file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"

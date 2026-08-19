@@ -1,4 +1,4 @@
-#pragma once
+#pragma once // NOLINT(portability-avoid-pragma-once) -- project-wide header convention
 
 #include <bit>
 #include <concepts>
@@ -176,12 +176,12 @@ public:
         if (count == 0) {
             return nullptr;
         }
-        // The four uncovered branch instances correspond to the one-byte
-        // value types char, signed char, unsigned char, and char8_t. For these
-        // types max_size() is SIZE_MAX, so no size_type value can exceed it.
-        // Overflow behavior for every wider supported type remains covered.
-        if (count > max_size()) { // GCOVR_EXCL_BR_WITHOUT_HIT: 4/38
-            throw std::bad_array_new_length{};
+        // For one-byte values max_size() is SIZE_MAX, so the overflow branch
+        // is mathematically unreachable and need not exist in that specialization.
+        if constexpr (sizeof(value_type) > 1) {
+            if (count > max_size()) {
+                throw std::bad_array_new_length{};
+            }
         }
 
         const auto bytes = count * sizeof(value_type);
@@ -218,9 +218,9 @@ public:
  * @return Always `true` because neither allocator contains state.
  */
 template<class T, class U, std::size_t Alignment, class AllocationPolicy>
-[[nodiscard]] constexpr auto
-operator==(const aligned_allocator<T, Alignment, AllocationPolicy>& /*unused*/,
-           const aligned_allocator<U, Alignment, AllocationPolicy>& /*unused*/) noexcept -> bool
+[[nodiscard]] constexpr auto operator==(const aligned_allocator<T, Alignment, AllocationPolicy>& /*unused*/,
+                                        const aligned_allocator<U, Alignment, AllocationPolicy>& /*unused*/) noexcept
+    -> bool
 {
     return true;
 }

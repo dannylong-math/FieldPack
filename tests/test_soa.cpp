@@ -1,4 +1,5 @@
 #include "support/table_contract.hpp"
+#include "support/tracking_allocation_policy.hpp"
 
 #include <boost/ut.hpp>
 #include <concepts>
@@ -7,53 +8,16 @@
 #include <fieldpack/detail/aligned_allocator.hpp>
 #include <fieldpack/detail/soa_storage.hpp>
 #include <fieldpack/layout.hpp>
+#include <fieldpack/schema.hpp>
 #include <fieldpack/table.hpp>
+#include <limits>
 #include <memory>
 #include <new>
 #include <type_traits>
 
 namespace {
 
-struct tracking_allocation_policy {
-    static inline std::size_t allocation_attempts{};
-    static inline std::size_t successful_allocations{};
-    static inline std::size_t deallocations{};
-    static inline std::size_t live_allocations{};
-    static inline std::size_t fail_on_attempt{};
-
-    static void reset() noexcept
-    {
-        allocation_attempts = 0;
-        successful_allocations = 0;
-        deallocations = 0;
-        live_allocations = 0;
-        fail_on_attempt = 0;
-    }
-
-    [[nodiscard]] static auto allocate_bytes(std::size_t bytes, std::size_t alignment) -> void*
-    {
-        ++allocation_attempts;
-        if (fail_on_attempt != 0 && allocation_attempts == fail_on_attempt) {
-            throw std::bad_alloc{};
-        }
-
-        auto* allocation = ::operator new(bytes, std::align_val_t{alignment});
-        ++successful_allocations;
-        ++live_allocations;
-        return allocation;
-    }
-
-    static void deallocate_bytes(void* allocation, std::size_t /*unused*/, std::size_t alignment) noexcept
-    {
-        if (allocation == nullptr) {
-            return;
-        }
-
-        ::operator delete(allocation, std::align_val_t{alignment});
-        ++deallocations;
-        --live_allocations;
-    }
-};
+using fieldpack_test::tracking_allocation_policy;
 
 using mixed_table = fieldpack::table<fieldpack_test::mixed_schema, fieldpack::soa>;
 using reordered_table = fieldpack::table<fieldpack_test::reordered_schema, fieldpack::soa>;
@@ -82,6 +46,29 @@ template<class Tag, class Table> void check_contiguous_aligned_column(Table& val
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         const auto actual_address = reinterpret_cast<std::uintptr_t>(std::addressof(values[index].template get<Tag>()));
         boost::ut::expect(actual_address == first_address + (index * sizeof(value_type)));
+    }
+}
+
+template<class T, class AllocationPolicy = fieldpack::detail::aligned_new_policy> void check_allocator_control_flow()
+{
+    using allocator_type =
+        fieldpack::detail::aligned_allocator<T, fieldpack::detail::default_alignment, AllocationPolicy>;
+
+    allocator_type allocator;
+    auto* empty_allocation = allocator.allocate(0);
+    boost::ut::expect(empty_allocation == nullptr);
+    allocator.deallocate(empty_allocation, 0);
+    allocator.deallocate(nullptr, 0);
+
+    auto* allocation = allocator.allocate(1);
+    boost::ut::expect(allocation != nullptr);
+    allocator.deallocate(allocation, 1);
+
+    constexpr auto largest_size = std::numeric_limits<std::size_t>::max();
+    if constexpr (allocator_type::max_size() < largest_size) {
+        constexpr auto overflowing_count = allocator_type::max_size() + 1U;
+        boost::ut::expect(boost::ut::throws<std::bad_array_new_length>(
+            [&] { static_cast<void>(allocator.allocate(overflowing_count)); }));
     }
 }
 
@@ -134,6 +121,75 @@ int main() // NOLINT(bugprone-exception-escape) -- Boost.UT owns top-level test 
         check_contiguous_aligned_column<fieldpack_test::count>(values);
     };
 
+    "allocator control flow is covered for every SoA field and policy"_test = [] {
+        const auto check_field_type = []<class T> {
+            check_allocator_control_flow<T>();
+
+            tracking_allocation_policy::reset();
+            check_allocator_control_flow<T, tracking_allocation_policy>();
+            expect(tracking_allocation_policy::successful_allocations == 1U);
+            expect(tracking_allocation_policy::deallocations == 1U);
+            expect(tracking_allocation_policy::live_allocations == 0U);
+        };
+
+        check_field_type.template operator()<float>();
+        check_field_type.template operator()<double>();
+        check_field_type.template operator()<std::uint32_t>();
+        check_field_type.template operator()<std::int64_t>();
+    };
+
+    "partial SoA construction is cleaned up after failure in every column"_test = [] {
+        using storage_type = fieldpack::detail::soa_storage<fieldpack_test::mixed_schema, tracking_allocation_policy>;
+
+        constexpr auto field_count = fieldpack::field_count_v<fieldpack_test::mixed_schema>;
+        for (std::size_t failing_column = 1; failing_column <= field_count; ++failing_column) {
+            tracking_allocation_policy::reset();
+            tracking_allocation_policy::fail_on_attempt = failing_column;
+
+            expect(throws<std::bad_alloc>([] { static_cast<void>(storage_type{5}); }));
+            expect(tracking_allocation_policy::successful_allocations == failing_column - 1U);
+            expect(tracking_allocation_policy::deallocations == failing_column - 1U);
+            expect(tracking_allocation_policy::live_allocations == 0U);
+        }
+    };
+
+    "partial SoA copying is cleaned up after failure in every column"_test = [] {
+        using storage_type = fieldpack::detail::soa_storage<fieldpack_test::mixed_schema, tracking_allocation_policy>;
+
+        tracking_allocation_policy::reset();
+        {
+            storage_type source(5);
+            for (std::size_t index = 0; index < source.size(); ++index) {
+                write_storage_record(source, index, index + 40U);
+            }
+
+            const auto source_live_allocations = tracking_allocation_policy::live_allocations;
+            constexpr auto field_count = fieldpack::field_count_v<fieldpack_test::mixed_schema>;
+            for (std::size_t failing_column = 1; failing_column <= field_count; ++failing_column) {
+                const auto successful_before = tracking_allocation_policy::successful_allocations;
+                const auto deallocations_before = tracking_allocation_policy::deallocations;
+                tracking_allocation_policy::fail_on_attempt =
+                    tracking_allocation_policy::allocation_attempts + failing_column;
+
+                expect(throws<std::bad_alloc>([&] { static_cast<void>(storage_type{source}); }));
+                expect(tracking_allocation_policy::successful_allocations - successful_before == failing_column - 1U);
+                expect(tracking_allocation_policy::deallocations - deallocations_before == failing_column - 1U);
+                expect(tracking_allocation_policy::live_allocations == source_live_allocations);
+            }
+
+            tracking_allocation_policy::fail_on_attempt = 0;
+            storage_type copied(source);
+            for (std::size_t index = 0; index < copied.size(); ++index) {
+                expect_storage_record(copied, index, index + 40U);
+            }
+            copied.template element<fieldpack_test::x>(0) = -1.0F;
+            expect(source.template element<fieldpack_test::x>(0) == 40.25F);
+        }
+
+        expect(tracking_allocation_policy::successful_allocations == tracking_allocation_policy::deallocations);
+        expect(tracking_allocation_policy::live_allocations == 0U);
+    };
+
     "an allocation failure preserves the original SoA backend"_test = [] {
         using storage_type = fieldpack::detail::soa_storage<fieldpack_test::mixed_schema, tracking_allocation_policy>;
 
@@ -164,6 +220,29 @@ int main() // NOLINT(bugprone-exception-escape) -- Boost.UT owns top-level test 
 
             for (std::size_t index = 0; index < values.size(); ++index) {
                 expect_storage_record(values, index, index + 50U);
+            }
+
+            tracking_allocation_policy::fail_on_attempt = 0;
+            const auto attempts_before_same_size = tracking_allocation_policy::allocation_attempts;
+            values.resize(values.size());
+            expect(tracking_allocation_policy::allocation_attempts == attempts_before_same_size);
+
+            values.resize(3);
+            expect(values.size() == 3U);
+            for (std::size_t index = 0; index < values.size(); ++index) {
+                expect_storage_record(values, index, index + 50U);
+            }
+
+            values.resize(7);
+            expect(values.size() == 7U);
+            for (std::size_t index = 0; index < 3; ++index) {
+                expect_storage_record(values, index, index + 50U);
+            }
+            for (std::size_t index = 3; index < values.size(); ++index) {
+                expect(values.template element<fieldpack_test::x>(index) == 0.0F);
+                expect(values.template element<fieldpack_test::y>(index) == 0.0);
+                expect(values.template element<fieldpack_test::id>(index) == std::uint32_t{});
+                expect(values.template element<fieldpack_test::count>(index) == std::int64_t{});
             }
         }
 

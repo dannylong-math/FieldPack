@@ -1,4 +1,4 @@
-#pragma once
+#pragma once // NOLINT(portability-avoid-pragma-once) -- project-wide header convention
 
 #include <concepts>
 #include <cstddef>
@@ -20,7 +20,7 @@ namespace fieldpack {
  * A tag is a C++ type used as the field's name. FieldPack compares tags by
  * exact type identity, so unrelated types with the same spelling remain
  * distinct. The descriptor itself is intentionally unconstrained so that
- * invalid descriptions can be inspected with @ref valid_field.
+ * invalid descriptions can be inspected with @ref fieldpack::valid_field.
  *
  * @tparam Tag Exact type used to identify the field.
  * @tparam T Value type associated with @p Tag.
@@ -50,8 +50,8 @@ template<class Tag, class T> struct field {
  * metadata without changing the result of @ref field_type_t for any tag.
  *
  * This primary descriptor remains formable for empty, malformed, or
- * duplicate field lists. Use @ref valid_schema to decide whether consumers
- * may use a description.
+ * duplicate field lists. Use @ref fieldpack::valid_schema to decide whether
+ * consumers may use a description.
  *
  * @tparam Fields Candidate field descriptors in their declared order.
  *
@@ -198,9 +198,9 @@ namespace detail {
 /**
  * @brief Validate the entries and tag uniqueness of a schema field pack.
  *
- * Checks are ordered with `if constexpr`: emptiness is rejected first, then
- * malformed or unsupported fields, then top-level cv-qualified descriptors.
- * Tag aliases are inspected only after all earlier checks succeed.
+ * A combined `if constexpr` guard rejects emptiness, malformed or unsupported
+ * fields, and top-level cv-qualified descriptors. Tag aliases are inspected
+ * only after every safe preliminary check succeeds.
  *
  * @tparam Fields Candidate entries from a @ref schema specialization.
  * @return `true` if the pack is non-empty, contains only unqualified valid
@@ -208,13 +208,8 @@ namespace detail {
  */
 template<class... Fields> consteval auto valid_schema_fields() noexcept -> bool
 {
-    if constexpr (sizeof...(Fields) == 0) {
-        return false;
-    }
-    else if constexpr (!(valid_field<Fields> && ...)) {
-        return false;
-    }
-    else if constexpr (!(std::same_as<Fields, std::remove_cv_t<Fields>> && ...)) {
+    if constexpr (sizeof...(Fields) == 0 || !(valid_field<Fields> && ...) ||
+                  !(std::same_as<Fields, std::remove_cv_t<Fields>> && ...)) {
         return false;
     }
     else {
@@ -241,7 +236,8 @@ struct valid_schema_impl<schema<Fields...>> : std::bool_constant<valid_schema_fi
  * @brief Primary declaration for metadata available only on schemas.
  *
  * The primary template is intentionally incomplete. Public consumers are
- * constrained by @ref valid_schema before instantiating its specialization.
+ * constrained by @ref fieldpack::valid_schema before instantiating its
+ * specialization.
  *
  * @tparam Schema Unqualified schema type.
  */
@@ -447,7 +443,10 @@ inline constexpr std::size_t field_index_v = schema_field_index_impl<std::remove
  * @tparam First First field still under consideration.
  * @tparam Rest Remaining fields.
  */
-template<std::size_t Index, class First, class... Rest> struct field_at_impl : field_at_impl<Index - 1, Rest...> {};
+template<std::size_t Index, class First, class... Rest> struct field_at_impl {
+    /** @brief Field descriptor selected after skipping @p Index entries. */
+    using type = field_at_impl<Index - 1, Rest...>::type;
+};
 
 /**
  * @brief Return the field at the current position.
@@ -485,10 +484,10 @@ struct schema_field_at_impl<schema<Fields...>, Index> : field_at_impl<Index, Fie
  */
 template<class Schema, class Tag> struct field_type_impl {
     /** @brief Field descriptor selected by the tag's declaration index. */
-    using selected_field = typename schema_field_at_impl<Schema, field_index_v<Schema, Tag>>::type;
+    using selected_field = schema_field_at_impl<Schema, field_index_v<Schema, Tag>>::type;
 
     /** @brief Value type extracted from @ref selected_field. */
-    using type = typename field_traits<selected_field>::type;
+    using type = field_traits<selected_field>::type;
 };
 
 } // namespace detail
@@ -496,9 +495,10 @@ template<class Schema, class Tag> struct field_type_impl {
 /**
  * @brief Value type associated with an exact tag in a valid schema.
  *
- * The alias is available only when @p Schema satisfies @ref valid_schema and
- * contains @p Tag. An unknown tag therefore fails a `requires` expression
- * cleanly instead of instantiating recursive lookup machinery.
+ * The alias is available only when @p Schema satisfies
+ * @ref fieldpack::valid_schema and contains @p Tag. An unknown tag therefore
+ * fails a `requires` expression cleanly instead of instantiating recursive
+ * lookup machinery.
  *
  * @tparam Schema Valid schema type to inspect.
  * @tparam Tag Exact tag type whose value type is requested.
@@ -519,6 +519,6 @@ template<class Schema, class Tag> struct field_type_impl {
  */
 template<class Schema, class Tag>
     requires(valid_schema<Schema> && contains_tag_v<Schema, Tag>)
-using field_type_t = typename detail::field_type_impl<std::remove_cv_t<Schema>, Tag>::type;
+using field_type_t = detail::field_type_impl<std::remove_cv_t<Schema>, Tag>::type;
 
 } // namespace fieldpack

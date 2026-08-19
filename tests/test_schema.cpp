@@ -23,8 +23,11 @@ struct trivial_non_arithmetic {
     int value;
 };
 
+// This deliberately user-provided destructor makes the type non-trivially
+// copyable so schema rejection can be checked at compile time.
+// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 struct non_trivially_copyable {
-    ~non_trivially_copyable() {}
+    ~non_trivially_copyable() {} // NOLINT(modernize-use-equals-default)
 };
 
 template<class Schema, class Tag>

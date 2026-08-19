@@ -3,10 +3,15 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <fieldpack/detail/aligned_allocator.hpp>
+#include <fieldpack/detail/aosoa_storage.hpp>
 #include <fieldpack/execution.hpp>
 #include <fieldpack/layout.hpp>
 #include <fieldpack/schema.hpp>
 #include <fieldpack/table.hpp>
+#include <limits>
+#include <memory>
+#include <new>
 #include <span>
 #include <stdexcept>
 #include <type_traits>
@@ -131,14 +136,14 @@ template<std::size_t ChunkExtent, class Layout> void check_one_traversal_size(st
     std::size_t visited_count = 0U;
 
     fieldpack::for_each_chunk<ChunkExtent>(values, traversal_access{}, [&](auto fields) {
-        auto ys = fields.template get<y>();
+        auto y_values = fields.template get<y>();
         auto ids = fields.template get<id>();
-        auto xs = fields.template get<x>();
+        auto x_values = fields.template get<x>();
         auto velocities = fields.template get<velocity>();
 
-        using y_span = std::remove_cvref_t<decltype(ys)>;
+        using y_span = std::remove_cvref_t<decltype(y_values)>;
         using id_span = std::remove_cvref_t<decltype(ids)>;
-        using x_span = std::remove_cvref_t<decltype(xs)>;
+        using x_span = std::remove_cvref_t<decltype(x_values)>;
         using velocity_span = std::remove_cvref_t<decltype(velocities)>;
         constexpr auto extent = x_span::extent;
 
@@ -154,10 +159,10 @@ template<std::size_t ChunkExtent, class Layout> void check_one_traversal_size(st
         static_assert(bundle_contains<decltype(fields), id>);
         static_assert(!bundle_contains<decltype(fields), untouched>);
 
-        boost::ut::expect(fields.size() == xs.size());
-        boost::ut::expect(ys.size() == xs.size());
-        boost::ut::expect(ids.size() == xs.size());
-        boost::ut::expect(velocities.size() == xs.size());
+        boost::ut::expect(fields.size() == x_values.size());
+        boost::ut::expect(y_values.size() == x_values.size());
+        boost::ut::expect(ids.size() == x_values.size());
+        boost::ut::expect(velocities.size() == x_values.size());
 
         if constexpr (extent == ChunkExtent) {
             ++full_chunk_count;
@@ -183,8 +188,8 @@ template<std::size_t ChunkExtent, class Layout> void check_one_traversal_size(st
             order.push_back(logical_index);
             ++visited_count;
 
-            xs[lane] += 2.0F * velocities[lane];
-            ys[lane] -= static_cast<double>(velocities[lane]);
+            x_values[lane] += 2.0F * velocities[lane];
+            y_values[lane] -= static_cast<double>(velocities[lane]);
         }
     });
 
@@ -209,7 +214,7 @@ template<std::size_t ChunkExtent, class Layout> void check_one_traversal_size(st
 
 template<std::size_t ChunkExtent, class Layout> void check_explicit_boundaries()
 {
-    constexpr std::array sizes{
+    constexpr std::array<std::size_t, 11> sizes{
         0U,
         1U,
         ChunkExtent - 1U,
@@ -251,15 +256,15 @@ template<std::size_t ChunkExtent, class Layout> void check_read_only_const_table
 
     std::uint64_t checksum = 0U;
     fieldpack::for_each_chunk<ChunkExtent>(observed, read_only_access{}, [&](auto fields) {
-        auto xs = fields.template get<x>();
+        auto x_values = fields.template get<x>();
         auto ids = fields.template get<id>();
-        using x_span = std::remove_cvref_t<decltype(xs)>;
+        using x_span = std::remove_cvref_t<decltype(x_values)>;
         using id_span = std::remove_cvref_t<decltype(ids)>;
         static_assert(std::same_as<typename x_span::element_type, const float>);
         static_assert(std::same_as<typename id_span::element_type, const std::uint32_t>);
 
         for (std::size_t lane = 0; lane < fields.size(); ++lane) {
-            checksum += ids[lane] + static_cast<std::uint64_t>(xs[lane]);
+            checksum += ids[lane] + static_cast<std::uint64_t>(x_values[lane]);
         }
     });
 
@@ -305,12 +310,12 @@ template<class Layout, std::size_t ChunkExtent> auto run_drift(std::size_t logic
     constexpr double time_step = 0.125;
     fieldpack::for_each_chunk<ChunkExtent>(values, drift_access{}, [](auto fields) {
         auto vxs = fields.template get<drift_vx>();
-        auto ys = fields.template get<drift_y>();
+        auto y_values = fields.template get<drift_y>();
         auto vys = fields.template get<drift_vy>();
-        auto xs = fields.template get<drift_x>();
+        auto x_values = fields.template get<drift_x>();
         for (std::size_t lane = 0; lane < fields.size(); ++lane) {
-            xs[lane] += time_step * vxs[lane];
-            ys[lane] += time_step * vys[lane];
+            x_values[lane] += time_step * vxs[lane];
+            y_values[lane] += time_step * vys[lane];
         }
     });
 
@@ -378,10 +383,12 @@ template<class Layout, std::size_t ChunkExtent> auto run_polynomial(std::size_t 
         auto c1s = fields.template get<c1>();
         auto c2s = fields.template get<c2>();
         auto c3s = fields.template get<c3>();
-        auto xs = fields.template get<polynomial_x>();
-        auto ys = fields.template get<polynomial_y>();
+        auto x_values = fields.template get<polynomial_x>();
+        auto y_values = fields.template get<polynomial_y>();
         for (std::size_t lane = 0; lane < fields.size(); ++lane) {
-            ys[lane] = ((c3s[lane] * xs[lane] + c2s[lane]) * xs[lane] + c1s[lane]) * xs[lane] + c0s[lane];
+            y_values[lane] =
+                ((((c3s[lane] * x_values[lane]) + c2s[lane]) * x_values[lane] + c1s[lane]) * x_values[lane]) +
+                c0s[lane];
         }
     });
 
@@ -403,7 +410,7 @@ auto reference_polynomial(std::size_t logical_size) -> std::vector<double>
         const auto coefficient2 = -0.5 * static_cast<double>((index % 5U) + 1U);
         const auto coefficient3 = 0.125 * static_cast<double>((index % 3U) + 1U);
         const auto input = 0.5 * static_cast<double>(index % 9U);
-        result.push_back(((coefficient3 * input + coefficient2) * input + coefficient1) * input + coefficient0);
+        result.push_back(((((coefficient3 * input) + coefficient2) * input + coefficient1) * input) + coefficient0);
     }
     return result;
 }
@@ -421,8 +428,110 @@ template<std::size_t ChunkExtent> void check_numerical_layout_equivalence()
     }
 }
 
+template<class Schema> struct schema_tile;
+
+template<class First, class... Rest> struct schema_tile<fieldpack::schema<First, Rest...>> {
+    using first_tag = typename fieldpack::detail::field_traits<First>::tag;
+    using type = fieldpack::detail::tile_storage<tile_extent, First, Rest...>;
+};
+
+template<class Schema> using schema_tile_t = typename schema_tile<Schema>::type;
+
+template<class Schema> using schema_first_tag_t = typename schema_tile<Schema>::first_tag;
+
+template<class Schema> void check_execution_schema_backend_control_flow()
+{
+    using tile_type = schema_tile_t<Schema>;
+    using allocator_type = fieldpack::detail::aligned_allocator<tile_type>;
+    using storage_type = fieldpack::detail::aosoa_storage<Schema, tile_extent>;
+    using first_tag = schema_first_tag_t<Schema>;
+
+    allocator_type allocator;
+    auto* empty_allocation = allocator.allocate(0U);
+    boost::ut::expect(empty_allocation == nullptr);
+    allocator.deallocate(empty_allocation, 0U);
+    allocator.deallocate(nullptr, 0U);
+
+    auto* allocation = allocator.allocate(1U);
+    boost::ut::expect(allocation != nullptr);
+    allocator.deallocate(allocation, 1U);
+
+    constexpr auto overflowing_count = allocator_type::max_size() + 1U;
+    boost::ut::expect(boost::ut::throws<std::bad_array_new_length>(
+        [&] { static_cast<void>(allocator.allocate(overflowing_count)); }));
+
+    storage_type values((2U * tile_extent) + 1U);
+    boost::ut::expect(!values.empty());
+    boost::ut::expect(values.physical_tile_count() == 3U);
+    boost::ut::expect(values.contiguous_count(0U) == tile_extent);
+    boost::ut::expect(values.contiguous_count(2U * tile_extent) == 1U);
+    boost::ut::expect(values.contiguous_count(values.size()) == 0U);
+
+    auto empty_span = values.template contiguous_span<first_tag>(values.size(), 0U);
+    boost::ut::expect(empty_span.empty());
+    const auto& observed = values;
+    auto empty_const_span = observed.template contiguous_span<first_tag>(observed.size(), 0U);
+    boost::ut::expect(empty_const_span.empty());
+
+    values.resize(values.size());
+    values.resize(2U * tile_extent);
+    values.resize(tile_extent + 1U);
+    values.resize(tile_extent + 2U);
+    values.resize(2U * tile_extent);
+    values.resize((2U * tile_extent) + 1U);
+
+    storage_type copied(values);
+    storage_type copy_assigned;
+    copy_assigned = copied;
+    auto* copy_assigned_alias = std::addressof(copy_assigned);
+    copy_assigned = *copy_assigned_alias;
+    storage_type moved(std::move(copied));
+    storage_type move_assigned;
+    move_assigned = std::move(moved);
+    auto* move_assigned_alias = std::addressof(move_assigned);
+    move_assigned = std::move(*move_assigned_alias);
+    boost::ut::expect(move_assigned.size() == (2U * tile_extent) + 1U);
+
+    values.resize(0U);
+    boost::ut::expect(values.empty());
+    values.resize(tile_extent);
+    boost::ut::expect(values.size() == tile_extent);
+
+    boost::ut::expect(boost::ut::throws<std::bad_array_new_length>(
+        [] { static_cast<void>(storage_type{std::numeric_limits<std::size_t>::max()}); }));
+}
+
+template<class Layout> void check_callback_category_runtime_paths()
+{
+    traversal_table<Layout> values(9U);
+    fieldpack::for_each_chunk<8U>(values, read_only_access{}, generic_read_callback{});
+    fieldpack::for_each_chunk<8U>(values, mutation_access{}, generic_mutation_callback{});
+    fieldpack::for_each_chunk<8U>(values, read_only_access{}, potentially_throwing_callback{});
+
+    const auto& observed = values;
+    fieldpack::for_each_chunk<8U>(observed, read_only_access{}, generic_read_callback{});
+    fieldpack::for_each_chunk<8U>(observed, read_only_access{}, potentially_throwing_callback{});
+
+    boost::ut::expect(observed.size() == 9U);
+}
+
 struct callback_error : std::runtime_error {
     callback_error() : std::runtime_error{"intentional traversal callback failure"} {}
+};
+
+struct controlled_throwing_callback {
+    std::size_t* callback_count;
+    bool throw_on_call;
+
+    template<class Fields> void operator()(Fields fields) const
+    {
+        ++*callback_count;
+        auto x_values = fields.template get<x>();
+        x_values.front() = -10.0F;
+        if (throw_on_call) {
+            throw callback_error{};
+        }
+    }
 };
 
 template<class Layout> void check_callback_exception_propagation()
@@ -431,19 +540,18 @@ template<class Layout> void check_callback_exception_propagation()
     initialize_traversal_table(values);
 
     std::size_t callback_count = 0U;
-    const auto traverse = [&] {
-        fieldpack::for_each_chunk<4U>(values, mutation_access{}, [&](auto fields) {
-            ++callback_count;
-            auto xs = fields.template get<x>();
-            xs.front() = -10.0F;
-            throw callback_error{};
-        });
-    };
+    controlled_throwing_callback callback{.callback_count = &callback_count, .throw_on_call = true};
+    const auto traverse = [&] { fieldpack::for_each_chunk<4U>(values, mutation_access{}, callback); };
 
     boost::ut::expect(boost::ut::throws<callback_error>(traverse));
     boost::ut::expect(callback_count == 1U);
     boost::ut::expect(values[0].template get<x>() == -10.0F);
     boost::ut::expect(values[1].template get<x>() == 1.25F);
+
+    callback.throw_on_call = false;
+    fieldpack::for_each_chunk<4U>(values, mutation_access{}, callback);
+    boost::ut::expect(callback_count == 4U);
+    boost::ut::expect(values[8].template get<x>() == -10.0F);
 }
 
 } // namespace
@@ -482,6 +590,17 @@ int main() // NOLINT(bugprone-exception-escape) -- Boost.UT owns top-level test 
     "callback exceptions propagate without rolling back completed mutations"_test = [] {
         check_callback_exception_propagation<fieldpack::soa>();
         check_callback_exception_propagation<fieldpack::aosoa<tile_extent>>();
+    };
+
+    "execution schemas cover production backend edge paths in this executable"_test = [] {
+        check_execution_schema_backend_control_flow<traversal_schema>();
+        check_execution_schema_backend_control_flow<drift_schema>();
+        check_execution_schema_backend_control_flow<polynomial_schema>();
+    };
+
+    "compile-time callback categories also exercise full and tail runtime paths"_test = [] {
+        check_callback_category_runtime_paths<fieldpack::soa>();
+        check_callback_category_runtime_paths<fieldpack::aosoa<tile_extent>>();
     };
 }
 

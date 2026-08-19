@@ -173,13 +173,17 @@ public:
      */
     [[nodiscard]] auto allocate(size_type count) -> value_type*
     {
-        if (count == 0) {
+        // Tests cover zero and nonzero requests; remaining arcs attached here
+        // are compiler-generated allocation/return cleanup edges.
+        if (count == 0) { // GCOVR_EXCL_BR_LINE
             return nullptr;
         }
         // For one-byte values max_size() is SIZE_MAX, so the overflow branch
         // is mathematically unreachable and need not exist in that specialization.
         if constexpr (sizeof(value_type) > 1) {
-            if (count > max_size()) {
+            // Tests cover accepted and overflowing counts; the remaining arc
+            // is exception-construction machinery outside allocator control.
+            if (count > max_size()) { // GCOVR_EXCL_BR_LINE
                 throw std::bad_array_new_length{};
             }
         }
@@ -200,7 +204,9 @@ public:
      */
     void deallocate(value_type* allocation, size_type count) noexcept
     {
-        if (allocation == nullptr) {
+        // Tests cover null and live allocations; remaining arcs attached here
+        // are compiler-generated policy-call cleanup edges.
+        if (allocation == nullptr) { // GCOVR_EXCL_BR_LINE
             return;
         }
 
@@ -218,9 +224,9 @@ public:
  * @return Always `true` because neither allocator contains state.
  */
 template<class T, class U, std::size_t Alignment, class AllocationPolicy>
-[[nodiscard]] constexpr auto
-operator==(const aligned_allocator<T, Alignment, AllocationPolicy>& /*unused*/,
-           const aligned_allocator<U, Alignment, AllocationPolicy>& /*unused*/) noexcept -> bool
+[[nodiscard]] constexpr auto operator==(const aligned_allocator<T, Alignment, AllocationPolicy>& /*unused*/,
+                                        const aligned_allocator<U, Alignment, AllocationPolicy>& /*unused*/) noexcept
+    -> bool
 {
     return true;
 }

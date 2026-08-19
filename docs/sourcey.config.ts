@@ -5,6 +5,20 @@ export default defineConfig({
   repo: "https://github.com/dannylong-math/FieldPack",
   editBranch: "main",
   prettyUrls: "slash",
+  theme: {
+    colors: {
+      primary: "#0F766E",
+      light: "#5EEAD4",
+      dark: "#115E59",
+    },
+    fonts: {
+      sans: "Inter",
+    },
+    layout: {
+      content: "112rem",
+    },
+    css: ["./custom.css"],
+  },
   navigation: {
     tabs: [
       {

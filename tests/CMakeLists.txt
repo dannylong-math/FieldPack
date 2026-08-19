@@ -27,5 +27,8 @@ foreach(test_source IN LISTS TEST_SOURCES)
         ${PROJECT_NAME}_coverage
         Boost::ut
     )
+    if(test_name STREQUAL "test_benchmark_contract")
+        target_include_directories(${test_name} PRIVATE "${PROJECT_SOURCE_DIR}/benchmark")
+    endif()
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()

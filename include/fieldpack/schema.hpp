@@ -198,9 +198,9 @@ namespace detail {
 /**
  * @brief Validate the entries and tag uniqueness of a schema field pack.
  *
- * Checks are ordered with `if constexpr`: emptiness is rejected first, then
- * malformed or unsupported fields, then top-level cv-qualified descriptors.
- * Tag aliases are inspected only after all earlier checks succeed.
+ * A combined `if constexpr` guard rejects emptiness, malformed or unsupported
+ * fields, and top-level cv-qualified descriptors. Tag aliases are inspected
+ * only after every safe preliminary check succeeds.
  *
  * @tparam Fields Candidate entries from a @ref schema specialization.
  * @return `true` if the pack is non-empty, contains only unqualified valid
@@ -208,13 +208,8 @@ namespace detail {
  */
 template<class... Fields> consteval auto valid_schema_fields() noexcept -> bool
 {
-    if constexpr (sizeof...(Fields) == 0) {
-        return false;
-    }
-    else if constexpr (!(valid_field<Fields> && ...)) {
-        return false;
-    }
-    else if constexpr (!(std::same_as<Fields, std::remove_cv_t<Fields>> && ...)) {
+    if constexpr (sizeof...(Fields) == 0 || !(valid_field<Fields> && ...) ||
+                  !(std::same_as<Fields, std::remove_cv_t<Fields>> && ...)) {
         return false;
     }
     else {

@@ -261,11 +261,25 @@ public:
         return static_cast<const field_view<selected_access>&>(*this).span();
     }
 
-    /** @brief Return the number of live logical elements in this chunk. */
-    [[nodiscard]] constexpr auto size() const noexcept -> size_type { return size_; }
+    /**
+     * @brief Return the number of live logical elements in this chunk.
+     *
+     * Fixed bundles report their compile-time extent directly, keeping the
+     * full-chunk loop bound visible to optimizers. Dynamic tail bundles use
+     * the runtime live count supplied during construction.
+     */
+    [[nodiscard]] constexpr auto size() const noexcept -> size_type
+    {
+        if constexpr (Extent == std::dynamic_extent) {
+            return size_;
+        }
+        else {
+            return Extent;
+        }
+    }
 
     /** @brief Determine whether this chunk contains no live elements. */
-    [[nodiscard]] constexpr auto empty() const noexcept -> bool { return size_ == 0U; }
+    [[nodiscard]] constexpr auto empty() const noexcept -> bool { return size() == 0U; }
 
 private:
     /** @brief Shared live length of every named field span. */

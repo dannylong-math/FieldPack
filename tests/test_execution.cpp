@@ -387,7 +387,7 @@ template<class Layout, std::size_t ChunkExtent> auto run_polynomial(std::size_t 
         auto y_values = fields.template get<polynomial_y>();
         for (std::size_t lane = 0; lane < fields.size(); ++lane) {
             y_values[lane] =
-                ((((c3s[lane] * x_values[lane]) + c2s[lane]) * x_values[lane] + c1s[lane]) * x_values[lane]) +
+                (((((c3s[lane] * x_values[lane]) + c2s[lane]) * x_values[lane]) + c1s[lane]) * x_values[lane]) +
                 c0s[lane];
         }
     });
@@ -410,7 +410,7 @@ auto reference_polynomial(std::size_t logical_size) -> std::vector<double>
         const auto coefficient2 = -0.5 * static_cast<double>((index % 5U) + 1U);
         const auto coefficient3 = 0.125 * static_cast<double>((index % 3U) + 1U);
         const auto input = 0.5 * static_cast<double>(index % 9U);
-        result.push_back(((((coefficient3 * input) + coefficient2) * input + coefficient1) * input) + coefficient0);
+        result.push_back((((((coefficient3 * input) + coefficient2) * input) + coefficient1) * input) + coefficient0);
     }
     return result;
 }
@@ -431,13 +431,13 @@ template<std::size_t ChunkExtent> void check_numerical_layout_equivalence()
 template<class Schema> struct schema_tile;
 
 template<class First, class... Rest> struct schema_tile<fieldpack::schema<First, Rest...>> {
-    using first_tag = typename fieldpack::detail::field_traits<First>::tag;
+    using first_tag = fieldpack::detail::field_traits<First>::tag;
     using type = fieldpack::detail::tile_storage<tile_extent, First, Rest...>;
 };
 
-template<class Schema> using schema_tile_t = typename schema_tile<Schema>::type;
+template<class Schema> using schema_tile_t = schema_tile<Schema>::type;
 
-template<class Schema> using schema_first_tag_t = typename schema_tile<Schema>::first_tag;
+template<class Schema> using schema_first_tag_t = schema_tile<Schema>::first_tag;
 
 template<class Schema> void check_execution_schema_backend_control_flow()
 {

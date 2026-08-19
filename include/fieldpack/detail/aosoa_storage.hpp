@@ -315,8 +315,8 @@ private:
 
     /** @brief Select one immutable named field lane from a complete tile. */
     template<class Tag>
-    [[nodiscard]] static auto field_lane(const tile_type& tile, size_type lane) noexcept
-        -> const field_type_t<schema_type, Tag>&
+    [[nodiscard]] static auto field_lane(const tile_type& tile,
+                                         size_type lane) noexcept -> const field_type_t<schema_type, Tag>&
     {
         const auto& field_values = static_cast<const selected_tile_field<Tag>&>(tile).values;
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,cppcoreguidelines-pro-bounds-constant-array-index)

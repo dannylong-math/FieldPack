@@ -62,20 +62,97 @@ target_link_libraries(my_application PRIVATE FieldPack::FieldPack)
 For reproducible builds, replace `main` with a release tag or full commit hash.
 Configure with `BUILD_TESTING=OFF` when dependency tests should not be built.
 
-Include the headers needed by your code:
+## Using FieldPack
+
+The umbrella header provides the complete public API. Define empty tag types,
+associate each tag with a value type, and select a layout when constructing a
+table:
 
 ```cpp
-#include <fieldpack/schema.hpp>
+#include <cstddef>
+#include <cstdint>
+#include <fieldpack/fieldpack.hpp>
 
 struct x {};
+struct velocity_x {};
 struct id {};
 
 using particle_schema = fieldpack::schema<
     fieldpack::field<x, float>,
-    fieldpack::field<id, unsigned>>;
+    fieldpack::field<velocity_x, float>,
+    fieldpack::field<id, std::uint32_t>>;
 
-static_assert(fieldpack::valid_schema<particle_schema>);
+using soa_particles = fieldpack::table<particle_schema, fieldpack::soa>;
+using aosoa_particles =
+    fieldpack::table<particle_schema, fieldpack::aosoa<64>>;
+
+int main()
+{
+    // This size produces eight full chunks of eight and one tail of three.
+    aosoa_particles particles(67);
+
+    auto first = particles.at(0);
+    first.get<x>() = 2.0F;
+    first.get<velocity_x>() = 0.5F;
+    first.get<id>() = 0U;
+
+    using drift_fields = fieldpack::field_access<
+        fieldpack::mutate<x>,
+        fieldpack::read<velocity_x>>;
+
+    fieldpack::for_each_chunk<8>(
+        particles,
+        drift_fields{},
+        [](auto chunk) {
+            auto positions = chunk.template get<x>();
+            const auto velocities = chunk.template get<velocity_x>();
+
+            for (std::size_t lane = 0; lane < chunk.size(); ++lane) {
+                positions[lane] += velocities[lane];
+            }
+        });
+}
 ```
+
+The same traversal function accepts an SoA table without changing the kernel.
+Read descriptors expose const spans, while mutate descriptors expose writable
+spans. The complete, executable version is
+[`examples/quickstart.cpp`](examples/quickstart.cpp).
+
+## Tiles, chunks, and tails
+
+These terms describe different layers of the library:
+
+| Term | Meaning |
+| --- | --- |
+| **Tile** | An AoSoA physical storage block containing `TileExtent` consecutive values for every schema field. SoA storage has no tiles. |
+| **Chunk** | Up to `ChunkExtent` consecutive logical records passed to one kernel callback as named spans. |
+| **Tail** | The final chunk when fewer than `ChunkExtent` live records remain. It contains only live values and never exposes AoSoA padding. |
+
+For AoSoA traversal, `ChunkExtent` must divide `TileExtent`, ensuring that a
+full chunk never crosses a physical tile boundary. SoA accepts every positive
+chunk extent.
+
+## Lifetime and invalidation
+
+Tables own their field storage. Row proxies returned by `operator[]` or `at()`,
+and spans or chunk bundles supplied during traversal, are non-owning views into
+that storage. Do not retain them across an operation that may invalidate the
+table.
+
+Resizing—including resizing to the current size—assigning, moving, swapping,
+or destroying a table invalidates its existing row proxies, references, spans,
+and chunk bundles. A callback should normally consume its named spans before it
+returns.
+
+## Supported configurations
+
+FieldPack requires C++23 and is currently tested with GCC and Clang on x86-64
+Linux. Other compilers and architectures are not yet part of the supported test
+matrix.
+
+Schema values may be non-cv, trivially copyable arithmetic types other than
+`bool`. Schemas must be non-empty and use each exact tag type only once.
 
 ## Building and running the tests
 
@@ -90,4 +167,6 @@ ctest --preset debug --output-on-failure
 
 The debug preset enables AddressSanitizer and UndefinedBehaviorSanitizer. The
 test suite is compiled as C++23 and is intended to pass with both GCC and
-Clang.
+Clang. When FieldPack is configured as the top-level project, the executable
+quickstart is also built and registered with CTest. Set `BUILD_EXAMPLES=OFF` to
+disable example targets explicitly.

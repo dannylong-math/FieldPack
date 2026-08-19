@@ -87,6 +87,14 @@ if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
+# Build examples by default only when FieldPack is the top-level project. This
+# keeps FetchContent and add_subdirectory consumers free of example targets
+# unless they explicitly opt in.
+option(BUILD_EXAMPLES "Build FieldPack examples" ${PROJECT_IS_TOP_LEVEL})
+if(BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
+
 option(BUILD_BENCHMARKS "Build Google Benchmark executables" OFF)
 if(BUILD_BENCHMARKS)
     add_subdirectory(benchmark)

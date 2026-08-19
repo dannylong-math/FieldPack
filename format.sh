@@ -7,6 +7,7 @@ DIRECTORIES=(
     include
     src
     tests
+    examples
     benchmark
 )
 

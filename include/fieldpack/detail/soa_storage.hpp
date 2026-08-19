@@ -1,6 +1,5 @@
-#pragma once
+#pragma once // NOLINT(portability-avoid-pragma-once) -- project-wide header convention
 
-#include <concepts>
 #include <cstddef>
 #include <fieldpack/detail/field_storage.hpp>
 #include <fieldpack/schema.hpp>
@@ -35,10 +34,10 @@ private:
 
 public:
     /** @brief Tag naming this column. */
-    using tag_type = typename traits::tag;
+    using tag_type = traits::tag;
 
     /** @brief Arithmetic value stored in this column. */
-    using value_type = typename traits::type;
+    using value_type = traits::type;
 
     /** @brief Construct an empty column without allocating. */
     soa_column() = default;
@@ -73,7 +72,10 @@ public:
      * @param index Valid zero-based element index.
      * @return Reference to the stored field value.
      */
-    [[nodiscard]] auto element(std::size_t index) noexcept -> value_type& { return values_[index]; }
+    [[nodiscard]] auto element(std::size_t index) noexcept -> value_type&
+    {
+        return values_[index]; // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    }
 
     /**
      * @brief Access one immutable value without bounds checking.
@@ -81,7 +83,10 @@ public:
      * @param index Valid zero-based element index.
      * @return Const reference to the stored field value.
      */
-    [[nodiscard]] auto element(std::size_t index) const noexcept -> const value_type& { return values_[index]; }
+    [[nodiscard]] auto element(std::size_t index) const noexcept -> const value_type&
+    {
+        return values_[index]; // NOLINT(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    }
 
     /**
      * @brief Reduce the column to a smaller size.
@@ -106,6 +111,8 @@ public:
     void copy_prefix_from(const soa_column& source, std::size_t count) noexcept
     {
         for (std::size_t index = 0; index < count; ++index) {
+            // Both columns were sized before this validated prefix is copied.
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
             values_[index] = source.values_[index];
         }
     }
@@ -147,13 +154,16 @@ template<class Schema, class AllocationPolicy> class soa_storage_impl;
  */
 template<class... Fields, class AllocationPolicy>
     requires stateless_allocation_policy<AllocationPolicy>
+// One private base per uniquely tagged field provides compile-time named
+// selection without exposing positional tuple access.
+// NOLINTNEXTLINE(misc-multiple-inheritance)
 class soa_storage_impl<schema<Fields...>, AllocationPolicy> : private soa_column<Fields, AllocationPolicy>... {
 private:
     /** @brief Column type associated with one field descriptor. */
     template<class Field> using column_type = soa_column<Field, AllocationPolicy>;
 
     /** @brief Field descriptor selected by an exact tag lookup. */
-    template<class Tag> using selected_field = typename field_type_impl<schema<Fields...>, Tag>::selected_field;
+    template<class Tag> using selected_field = field_type_impl<schema<Fields...>, Tag>::selected_field;
 
     /** @brief Column base selected by an exact tag lookup. */
     template<class Tag> using selected_column = column_type<selected_field<Tag>>;

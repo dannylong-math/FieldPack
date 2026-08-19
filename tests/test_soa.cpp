@@ -1,6 +1,7 @@
 #include "support/table_contract.hpp"
 
 #include <boost/ut.hpp>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <fieldpack/detail/aligned_allocator.hpp>
@@ -62,19 +63,25 @@ static_assert(fieldpack::valid_layout<fieldpack::soa>);
 static_assert(!fieldpack::valid_layout<const fieldpack::soa>);
 static_assert(!fieldpack::valid_layout<int>);
 static_assert(!fieldpack::layout_traits<fieldpack::soa>::is_tiled);
-static_assert(std::same_as<typename qualified_schema_table::schema_type, fieldpack_test::mixed_schema>);
+static_assert(std::same_as<qualified_schema_table::schema_type, fieldpack_test::mixed_schema>);
 
 template<class Tag, class Table> void check_contiguous_aligned_column(Table& values)
 {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     using value_type = std::remove_reference_t<decltype(values[0].template get<Tag>())>;
 
+    // The table is known to be non-empty and this test intentionally exercises
+    // the unchecked accessor and compares its raw column addresses.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     auto* first_value = std::addressof(values[0].template get<Tag>());
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     const auto first_address = reinterpret_cast<std::uintptr_t>(first_value);
     boost::ut::expect(first_address % fieldpack::detail::default_alignment == 0U);
 
     for (std::size_t index = 0; index < values.size(); ++index) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast,cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         const auto actual_address = reinterpret_cast<std::uintptr_t>(std::addressof(values[index].template get<Tag>()));
-        boost::ut::expect(actual_address == first_address + index * sizeof(value_type));
+        boost::ut::expect(actual_address == first_address + (index * sizeof(value_type)));
     }
 }
 
@@ -96,7 +103,7 @@ template<class Storage> void expect_storage_record(const Storage& values, std::s
 
 } // namespace
 
-int main()
+int main() // NOLINT(bugprone-exception-escape) -- Boost.UT owns top-level test exception handling
 {
     using namespace boost::ut;
 
@@ -110,9 +117,11 @@ int main()
 
     "SoA tables normalize top-level schema cv-qualification"_test = [] {
         qualified_schema_table values(1);
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         values[0].template get<fieldpack_test::x>() = 3.5F;
 
         const auto& observed = values;
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         expect(observed[0].template get<fieldpack_test::x>() == 3.5F);
     };
 

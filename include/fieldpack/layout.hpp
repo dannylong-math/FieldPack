@@ -1,4 +1,4 @@
-#pragma once
+#pragma once // NOLINT(portability-avoid-pragma-once) -- project-wide header convention
 
 #include <concepts>
 #include <type_traits>

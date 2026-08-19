@@ -1,6 +1,5 @@
-#pragma once
+#pragma once // NOLINT(portability-avoid-pragma-once) -- project-wide header convention
 
-#include <concepts>
 #include <cstddef>
 #include <fieldpack/detail/soa_storage.hpp>
 #include <fieldpack/layout.hpp>
@@ -8,7 +7,6 @@
 #include <memory>
 #include <stdexcept>
 #include <type_traits>
-#include <utility>
 
 /**
  * @file table.hpp
@@ -42,10 +40,10 @@ private:
 
 public:
     /** @brief Schema whose tags may be accessed through this proxy. */
-    using schema_type = typename unqualified_storage::schema_type;
+    using schema_type = unqualified_storage::schema_type;
 
     /** @brief Unsigned type used for the logical row index. */
-    using size_type = typename unqualified_storage::size_type;
+    using size_type = unqualified_storage::size_type;
 
     /**
      * @brief Bind a proxy to one logical backend index.
@@ -234,7 +232,7 @@ public:
     [[nodiscard]] auto at(size_type index) -> reference
     {
         check_index(index);
-        return (*this)[index];
+        return reference{storage_, index};
     }
 
     /**
@@ -247,7 +245,7 @@ public:
     [[nodiscard]] auto at(size_type index) const -> const_reference
     {
         check_index(index);
-        return (*this)[index];
+        return const_reference{storage_, index};
     }
 
     /**

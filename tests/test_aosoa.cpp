@@ -15,7 +15,6 @@
 #include <memory>
 #include <new>
 #include <stdexcept>
-#include <type_traits>
 
 // These tests intentionally use table::operator[] and detail-level unchecked
 // backend access after establishing valid logical indices by construction.
@@ -59,6 +58,13 @@ template<std::size_t TileExtent>
 using tracked_storage =
     fieldpack::detail::aosoa_storage<fieldpack_test::mixed_schema, TileExtent, tracking_allocation_policy>;
 
+template<std::size_t TileExtent>
+using mixed_tile = fieldpack::detail::tile_storage<TileExtent, fieldpack_test::x_field, fieldpack_test::y_field,
+                                                   fieldpack_test::id_field, fieldpack_test::count_field>;
+
+using reordered_tile = fieldpack::detail::tile_storage<8, fieldpack_test::count_field, fieldpack_test::id_field,
+                                                       fieldpack_test::y_field, fieldpack_test::x_field>;
+
 template<std::size_t TileExtent> constexpr auto expected_tile_count(std::size_t logical_size) noexcept -> std::size_t
 {
     return (logical_size / TileExtent) + static_cast<std::size_t>(logical_size % TileExtent != 0U);
@@ -86,6 +92,38 @@ template<class Storage> void expect_storage_record(const Storage& values, std::s
     boost::ut::expect(values.template element<fieldpack_test::y>(index) == static_cast<double>(seed) + 0.5);
     boost::ut::expect(values.template element<fieldpack_test::id>(index) == static_cast<std::uint32_t>(1'000U + seed));
     boost::ut::expect(values.template element<fieldpack_test::count>(index) == -static_cast<std::int64_t>(seed) - 7);
+}
+
+template<class Tile, class AllocationPolicy = fieldpack::detail::aligned_new_policy>
+void check_tile_allocator_control_flow()
+{
+    using allocator_type =
+        fieldpack::detail::aligned_allocator<Tile, fieldpack::detail::default_alignment, AllocationPolicy>;
+
+    allocator_type allocator;
+    auto* empty_allocation = allocator.allocate(0);
+    boost::ut::expect(empty_allocation == nullptr);
+    allocator.deallocate(empty_allocation, 0);
+    allocator.deallocate(nullptr, 0);
+
+    auto* allocation = allocator.allocate(1);
+    boost::ut::expect(allocation != nullptr);
+    allocator.deallocate(allocation, 1);
+
+    constexpr auto overflowing_count = allocator_type::max_size() + 1U;
+    boost::ut::expect(boost::ut::throws<std::bad_array_new_length>(
+        [&] { static_cast<void>(allocator.allocate(overflowing_count)); }));
+}
+
+template<class Tile> void check_tile_allocator_for_every_policy()
+{
+    check_tile_allocator_control_flow<Tile>();
+
+    tracking_allocation_policy::reset();
+    check_tile_allocator_control_flow<Tile, tracking_allocation_policy>();
+    boost::ut::expect(tracking_allocation_policy::successful_allocations == 1U);
+    boost::ut::expect(tracking_allocation_policy::deallocations == 1U);
+    boost::ut::expect(tracking_allocation_policy::live_allocations == 0U);
 }
 
 template<std::size_t TileExtent> void check_boundary_sizes_and_tile_counts()
@@ -152,7 +190,7 @@ auto tile_field_range(const Storage& values, std::size_t tile_first_index) -> by
     // values; it only verifies that physical field arrays cannot overlap.
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     const auto begin = reinterpret_cast<std::uintptr_t>(field_start);
-    return {begin, begin + (TileExtent * sizeof(value_type))};
+    return {.begin = begin, .end = begin + (TileExtent * sizeof(value_type))};
 }
 
 void expect_disjoint(byte_range left, byte_range right)
@@ -167,7 +205,7 @@ template<std::size_t TileExtent> void check_physical_mapping_alignment_and_alias
     tracking_allocation_policy::reset();
     {
         constexpr auto logical_size = (2U * TileExtent) + 1U;
-        storage_type values(logical_size);
+        const storage_type values(logical_size);
         boost::ut::expect(values.physical_tile_count() == 3U);
 
         check_field_mapping<fieldpack_test::x, TileExtent>(values);
@@ -285,6 +323,89 @@ template<std::size_t TileExtent> void check_allocation_failures_and_overflow()
     boost::ut::expect(tracking_allocation_policy::live_allocations == 0U);
 }
 
+template<std::size_t TileExtent> void check_tracked_storage_lifecycle_and_resize_paths()
+{
+    using storage_type = tracked_storage<TileExtent>;
+
+    tracking_allocation_policy::reset();
+    {
+        constexpr auto original_size = (2U * TileExtent) + 1U;
+        storage_type original(original_size);
+        for (std::size_t index = 0; index < original.size(); ++index) {
+            write_storage_record(original, index, index + 80U);
+        }
+
+        storage_type copied(original);
+        storage_type copy_assigned;
+        copy_assigned = original;
+        auto* copy_assigned_alias = std::addressof(copy_assigned);
+        copy_assigned = *copy_assigned_alias;
+
+        const auto live_before_failed_copy = tracking_allocation_policy::live_allocations;
+        tracking_allocation_policy::fail_on_attempt = tracking_allocation_policy::allocation_attempts + 1U;
+        boost::ut::expect(boost::ut::throws<std::bad_alloc>([&] { static_cast<void>(storage_type{original}); }));
+        boost::ut::expect(tracking_allocation_policy::live_allocations == live_before_failed_copy);
+        tracking_allocation_policy::fail_on_attempt = 0U;
+
+        storage_type moved(std::move(copied));
+        // The backend deliberately strengthens the usual moved-from guarantee
+        // to an empty, internally consistent state, which this test observes.
+        // NOLINTNEXTLINE(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
+        boost::ut::expect(copied.empty());
+        // NOLINTNEXTLINE(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
+        boost::ut::expect(copied.physical_tile_count() == 0U);
+
+        storage_type move_assigned;
+        move_assigned = std::move(moved);
+        // The backend's documented empty-source postcondition is intentionally
+        // stronger than the general standard-library moved-from convention.
+        // NOLINTNEXTLINE(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
+        boost::ut::expect(moved.empty());
+        // NOLINTNEXTLINE(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
+        boost::ut::expect(moved.physical_tile_count() == 0U);
+        auto* move_assigned_alias = std::addressof(move_assigned);
+        move_assigned = std::move(*move_assigned_alias);
+
+        original.resize(original.size());
+        original.resize(2U * TileExtent);
+        original.resize(TileExtent + 1U);
+        original.resize(TileExtent + 2U);
+        original.resize(2U * TileExtent);
+        original.resize((2U * TileExtent) + 1U);
+        original.resize(0U);
+        original.resize(TileExtent);
+
+        boost::ut::expect(original.size() == TileExtent);
+        for (std::size_t index = 0; index < original.size(); ++index) {
+            boost::ut::expect(original.template element<fieldpack_test::x>(index) == 0.0F);
+            boost::ut::expect(original.template element<fieldpack_test::y>(index) == 0.0);
+            boost::ut::expect(original.template element<fieldpack_test::id>(index) == std::uint32_t{});
+            boost::ut::expect(original.template element<fieldpack_test::count>(index) == std::int64_t{});
+        }
+
+        for (std::size_t index = 0; index < copy_assigned.size(); ++index) {
+            expect_storage_record(copy_assigned, index, index + 80U);
+            expect_storage_record(move_assigned, index, index + 80U);
+        }
+    }
+
+    boost::ut::expect(tracking_allocation_policy::successful_allocations == tracking_allocation_policy::deallocations);
+    boost::ut::expect(tracking_allocation_policy::live_allocations == 0U);
+}
+
+template<class Schema, std::size_t TileExtent> void check_production_storage_growth_and_overflow_paths()
+{
+    using storage_type = fieldpack::detail::aosoa_storage<Schema, TileExtent>;
+
+    storage_type values(TileExtent);
+    values.resize(TileExtent + 1U);
+    values.resize(TileExtent + 2U);
+    boost::ut::expect(values.size() == TileExtent + 2U);
+
+    boost::ut::expect(boost::ut::throws<std::bad_array_new_length>(
+        [] { static_cast<void>(storage_type{std::numeric_limits<std::size_t>::max()}); }));
+}
+
 } // namespace
 
 int main() // NOLINT(bugprone-exception-escape) -- Boost.UT owns top-level test exception handling
@@ -331,6 +452,26 @@ int main() // NOLINT(bugprone-exception-escape) -- Boost.UT owns top-level test 
         check_allocation_failures_and_overflow<1>();
         check_allocation_failures_and_overflow<8>();
         check_allocation_failures_and_overflow<64>();
+    };
+
+    "AoSoA tile allocators cover zero success null release and overflow paths"_test = [] {
+        check_tile_allocator_for_every_policy<mixed_tile<1>>();
+        check_tile_allocator_for_every_policy<mixed_tile<8>>();
+        check_tile_allocator_for_every_policy<mixed_tile<64>>();
+        check_tile_allocator_control_flow<reordered_tile>();
+    };
+
+    "AoSoA tracked storage covers lifecycle and resize control flow for every extent"_test = [] {
+        check_tracked_storage_lifecycle_and_resize_paths<1>();
+        check_tracked_storage_lifecycle_and_resize_paths<8>();
+        check_tracked_storage_lifecycle_and_resize_paths<64>();
+    };
+
+    "AoSoA production storage covers aligned growth and overflow for every generated type"_test = [] {
+        check_production_storage_growth_and_overflow_paths<fieldpack_test::mixed_schema, 1>();
+        check_production_storage_growth_and_overflow_paths<fieldpack_test::mixed_schema, 8>();
+        check_production_storage_growth_and_overflow_paths<fieldpack_test::mixed_schema, 64>();
+        check_production_storage_growth_and_overflow_paths<fieldpack_test::reordered_schema, 8>();
     };
 }
 

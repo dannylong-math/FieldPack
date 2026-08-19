@@ -273,7 +273,11 @@ private:
     void check_index(size_type index) const
     {
         if (index >= size()) {
-            throw std::out_of_range{"fieldpack::table::at index out of range"};
+            // Clang emits one branch per table instantiation for failure while
+            // constructing std::out_of_range. That standard-library allocation
+            // failure cannot be injected through the table API. Tests cover both
+            // index-check outcomes and successful propagation of this exception.
+            throw std::out_of_range{"fieldpack::table::at index out of range"}; // GCOVR_EXCL_BR_WITHOUT_HIT: 2/4
         }
     }
 

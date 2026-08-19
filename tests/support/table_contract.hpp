@@ -137,10 +137,18 @@ template<class Table> void check_bounds_contract()
     expect_record(values, 3, 30);
     expect_record(static_cast<const Table&>(values), 3, 30);
 
+    auto checked_row = values.at(0);
+    checked_row.template get<x>() = 27.5F;
+    boost::ut::expect(values[0].template get<x>() == 27.5F);
+
+    const Table& observed = values;
+    const auto checked_const_row = observed.at(3);
+    boost::ut::expect(checked_const_row.template get<x>() == static_cast<float>(30) + 0.25F);
+    boost::ut::expect(checked_const_row.template get<id>() == 1'030U);
+
     boost::ut::expect(boost::ut::throws<std::out_of_range>([&] { static_cast<void>(values.at(values.size())); }));
     boost::ut::expect(boost::ut::throws<std::out_of_range>([&] { static_cast<void>(values.at(values.size() + 9U)); }));
 
-    const Table& observed = values;
     boost::ut::expect(boost::ut::throws<std::out_of_range>([&] { static_cast<void>(observed.at(observed.size())); }));
     boost::ut::expect(
         boost::ut::throws<std::out_of_range>([&] { static_cast<void>(observed.at(observed.size() + 9U)); }));

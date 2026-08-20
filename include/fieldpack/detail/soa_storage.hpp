@@ -352,8 +352,8 @@ public:
      */
     template<class Tag, std::size_t Extent = std::dynamic_extent>
         requires contains_tag_v<schema_type, Tag>
-    [[nodiscard]] auto contiguous_span(size_type first, size_type count) noexcept
-        -> std::span<field_type_t<schema_type, Tag>, Extent>
+    [[nodiscard]] auto contiguous_span(size_type first,
+                                       size_type count) noexcept -> std::span<field_type_t<schema_type, Tag>, Extent>
     {
         return static_cast<selected_column<Tag>&>(*this).template span<Extent>(first, count);
     }

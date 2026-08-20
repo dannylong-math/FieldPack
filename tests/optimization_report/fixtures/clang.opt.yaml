@@ -1,0 +1,40 @@
+--- !Passed
+Pass:            loop-vectorize
+Name:            Vectorized
+DebugLoc:        { File: 'include/fieldpack/execution.hpp', Line: 217, Column: 9 }
+Function:        '_ZN9fieldpack14for_each_chunkEv'
+Args:
+  - String:          'vectorized loop (vectorization width: '
+  - VectorizationFactor: '4'
+  - String:          ', interleaved count: 2)'
+UnknownFutureKey: ignored
+...
+--- !Missed
+Pass:            loop-vectorize
+Name:            CantVectorize
+DebugLoc:
+  File:            'benchmark/drift.cpp'
+  Line:            24
+  Column:          13
+Function:        drift_kernel
+Args:
+  - String:          'loop not vectorized: unsafe dependent memory operations'
+...
+--- !Analysis
+Pass:            inline
+Name:            NoDefinition
+DebugLoc:        { File: '/usr/include/c++/vector', Line: 99, Column: 3 }
+Function:        dependency_function
+Args:
+  - String:          'definition unavailable'
+...
+--- !Passed
+Pass:            loop-vectorize
+Name:            Vectorized
+DebugLoc:        { File: 'include/fieldpack/execution.hpp', Line: 217, Column: 9 }
+Function:        '_ZN9fieldpack14for_each_chunkEv'
+Args:
+  - String:          'vectorized loop (vectorization width: '
+  - VectorizationFactor: '4'
+  - String:          ', interleaved count: 2)'
+...

@@ -1,0 +1,11 @@
+preset=@FIELDPACK_BENCHMARK_PRESET@
+build_type=@CMAKE_BUILD_TYPE@
+compiler_id=@CMAKE_CXX_COMPILER_ID@
+compiler_version=@CMAKE_CXX_COMPILER_VERSION@
+compiler_path=@CMAKE_CXX_COMPILER@
+compiler_flags=@fieldpack_benchmark_effective_flags@
+host_system_processor=@fieldpack_benchmark_host_processor@
+google_benchmark_source_dir=@google_benchmark_SOURCE_DIR@
+chunk_extent=8
+field_types=double
+result_name_schema=kernel/implementation/layout/problem_size

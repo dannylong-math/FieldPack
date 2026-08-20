@@ -80,6 +80,26 @@ void reference_field_subset(fieldpack_benchmark::field_subset_arrays& values)
     return checksum;
 }
 
+void expect_reduction_close(double actual, double expected, const fieldpack_benchmark::reduction_arrays& values)
+{
+    // release-max permits reassociation. The fixture deliberately contains
+    // cancelling +/-1e100 terms, so the valid forward-error bound must scale
+    // with the sum of magnitudes rather than the small cancelled result.
+    double magnitude_sum = 0.0;
+    for (std::size_t index = 0U; index < values.a.size(); ++index) {
+        magnitude_sum += 1.0;
+        magnitude_sum += std::abs(values.a.at(index));
+        magnitude_sum += std::abs(values.b.at(index));
+        magnitude_sum += std::abs(values.c.at(index));
+        magnitude_sum += std::abs(values.d.at(index));
+    }
+    constexpr auto rounding_factor = 64.0 * std::numeric_limits<double>::epsilon();
+    constexpr auto absolute_tolerance = 1.0e-12;
+    boost::ut::expect(std::isfinite(actual));
+    boost::ut::expect(std::isfinite(expected));
+    boost::ut::expect(std::abs(actual - expected) <= absolute_tolerance + (rounding_factor * magnitude_sum));
+}
+
 void expect_polynomial_raw(const fieldpack_benchmark::polynomial_arrays& actual,
                            const fieldpack_benchmark::polynomial_arrays& expected)
 {
@@ -240,8 +260,8 @@ template<class Layout> void check_reduction(std::size_t size)
     const auto raw_checksum = fieldpack_benchmark::reduction(raw);
     const auto table_checksum = fieldpack_benchmark::reduction(static_cast<const decltype(values)&>(values));
 
-    expect_close(raw_checksum, reference_checksum);
-    expect_close(table_checksum, reference_checksum);
+    expect_reduction_close(raw_checksum, reference_checksum, expected);
+    expect_reduction_close(table_checksum, reference_checksum, expected);
     boost::ut::expect(raw.a == expected.a);
     boost::ut::expect(raw.b == expected.b);
     boost::ut::expect(raw.c == expected.c);

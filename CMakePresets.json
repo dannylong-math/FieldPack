@@ -44,12 +44,61 @@
       }
     },
     {
-      "name": "benchmark",
-      "displayName": "Benchmarks",
+      "name": "benchmark-portable",
+      "displayName": "Benchmarks (portable release)",
+      "description": "Portable release benchmarks without host-specific instruction-set flags.",
       "inherits": "release",
       "cacheVariables": {
         "BUILD_TESTING": "OFF",
-        "BUILD_BENCHMARKS": "ON"
+        "BUILD_EXAMPLES": "OFF",
+        "BUILD_BENCHMARKS": "ON",
+        "FIELDPACK_BENCHMARK_PRESET": "benchmark-portable"
+      }
+    },
+    {
+      "name": "benchmark-x86-64-native",
+      "displayName": "Benchmarks (x86-64 native)",
+      "description": "Machine-specific x86-64 benchmarks compiled with -march=native and -mtune=native.",
+      "inherits": "benchmark-portable",
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG -march=native -mtune=native",
+        "FIELDPACK_BENCHMARK_PRESET": "benchmark-x86-64-native",
+        "FIELDPACK_BENCHMARK_X86_64_NATIVE": "ON"
+      }
+    },
+    {
+      "name": "benchmark",
+      "displayName": "Benchmarks (portable compatibility alias)",
+      "description": "Backward-compatible alias for the portable benchmark configuration.",
+      "inherits": "benchmark-portable",
+      "cacheVariables": {
+        "FIELDPACK_BENCHMARK_PRESET": "benchmark"
+      }
+    },
+    {
+      "name": "optimization-report-clang",
+      "displayName": "Clang optimization report",
+      "description": "Release build with opt-in serialized Clang optimization remarks.",
+      "inherits": "release",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "clang++",
+        "BUILD_TESTING": "OFF",
+        "BUILD_EXAMPLES": "OFF",
+        "BUILD_BENCHMARKS": "OFF",
+        "ENABLE_OPTIMIZATION_REPORTS": "ON"
+      }
+    },
+    {
+      "name": "optimization-report-gcc",
+      "displayName": "GCC optimization report",
+      "description": "Release build with opt-in GCC machine-readable optimization records.",
+      "inherits": "release",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "g++",
+        "BUILD_TESTING": "OFF",
+        "BUILD_EXAMPLES": "OFF",
+        "BUILD_BENCHMARKS": "OFF",
+        "ENABLE_OPTIMIZATION_REPORTS": "ON"
       }
     }
   ],
@@ -58,7 +107,11 @@
     { "name": "debug-tidy",  "configurePreset": "debug-tidy"  },
     { "name": "release",     "configurePreset": "release"     },
     { "name": "release-max", "configurePreset": "release-max" },
-    { "name": "benchmark",   "configurePreset": "benchmark"   }
+    { "name": "benchmark-portable",       "configurePreset": "benchmark-portable"       },
+    { "name": "benchmark-x86-64-native",  "configurePreset": "benchmark-x86-64-native"  },
+    { "name": "benchmark",                "configurePreset": "benchmark"                },
+    { "name": "optimization-report-clang", "configurePreset": "optimization-report-clang" },
+    { "name": "optimization-report-gcc",   "configurePreset": "optimization-report-gcc"   }
   ],
   "testPresets": [
     { "name": "debug",       "configurePreset": "debug",       "output": { "outputOnFailure": true } },

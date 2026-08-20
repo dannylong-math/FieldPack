@@ -28,7 +28,7 @@ export default defineConfig({
           groups: [
             {
               group: "Getting Started",
-              pages: ["introduction"],
+              pages: ["introduction", "benchmarks", "optimization-reports"],
             },
           ],
         }),

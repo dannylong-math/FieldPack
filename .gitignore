@@ -4,4 +4,7 @@ build-*/
 compile_commands.json
 docs/dist/
 docs/node_modules/
+__pycache__/
+*.pyc
 _planning/
+.venv*

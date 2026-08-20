@@ -71,22 +71,25 @@ table:
 ```cpp
 #include <cstddef>
 #include <cstdint>
+
+// The umbrella header is the recommended user-facing include.
 #include <fieldpack/fieldpack.hpp>
+
+namespace {
 
 struct x {};
 struct velocity_x {};
 struct id {};
 
-using particle_schema = fieldpack::schema<
-    fieldpack::field<x, float>,
-    fieldpack::field<velocity_x, float>,
-    fieldpack::field<id, std::uint32_t>>;
+using particle_schema = fieldpack::schema<fieldpack::field<x, float>, fieldpack::field<velocity_x, float>,
+                                          fieldpack::field<id, std::uint32_t>>;
 
 using soa_particles = fieldpack::table<particle_schema, fieldpack::soa>;
-using aosoa_particles =
-    fieldpack::table<particle_schema, fieldpack::aosoa<64>>;
+using aosoa_particles = fieldpack::table<particle_schema, fieldpack::aosoa<64>>;
 
-int main()
+} // namespace
+
+int main() 
 {
     // This size produces eight full chunks of eight and one tail of three.
     aosoa_particles particles(67);
@@ -96,28 +99,26 @@ int main()
     first.get<velocity_x>() = 0.5F;
     first.get<id>() = 0U;
 
-    using drift_fields = fieldpack::field_access<
-        fieldpack::mutate<x>,
-        fieldpack::read<velocity_x>>;
+    using drift_fields = fieldpack::field_access<fieldpack::mutate<x>, fieldpack::read<velocity_x>>;
 
-    fieldpack::for_each_chunk<8>(
-        particles,
-        drift_fields{},
-        [](auto chunk) {
-            auto positions = chunk.template get<x>();
-            const auto velocities = chunk.template get<velocity_x>();
+    fieldpack::for_each_chunk<8>(particles, drift_fields{}, [](auto chunk) {
+        auto positions = chunk.template get<x>();
+        const auto velocities = chunk.template get<velocity_x>();
 
-            for (std::size_t lane = 0; lane < chunk.size(); ++lane) {
-                positions[lane] += velocities[lane];
-            }
-        });
+        // Both spans have the callback-provided chunk size.
+        for (std::size_t lane = 0; lane < chunk.size(); ++lane) {
+            positions[lane] += velocities[lane];
+        }
+    });
 }
 ```
 
 The same traversal function accepts an SoA table without changing the kernel.
 Read descriptors expose const spans, while mutate descriptors expose writable
 spans. The complete, executable version is
-[`examples/quickstart.cpp`](examples/quickstart.cpp).
+[`examples/quickstart.cpp`](examples/quickstart.cpp). The shorter snippet above
+is also compiled verbatim as
+[`examples/documented_quickstart.cpp`](examples/documented_quickstart.cpp).
 
 ## Tiles, chunks, and tails
 
@@ -170,3 +171,41 @@ test suite is compiled as C++23 and is intended to pass with both GCC and
 Clang. When FieldPack is configured as the top-level project, the executable
 quickstart is also built and registered with CTest. Set `BUILD_EXAMPLES=OFF` to
 disable example targets explicitly.
+
+## Running the benchmarks
+
+Build the portable Release benchmark suite and save a labeled JSON result set:
+
+```shell
+cmake --preset benchmark-portable
+cmake --build --preset benchmark-portable
+./benchmark/run_benchmarks.sh benchmark-portable baseline
+```
+
+An x86-64-only preset is also available with `-march=native` and
+`-mtune=native`:
+
+```shell
+cmake --preset benchmark-x86-64-native
+cmake --build --preset benchmark-x86-64-native
+```
+
+Benchmark results are informational and have no timing thresholds. See the
+[benchmark guide](https://dannylong-math.github.io/FieldPack/benchmarks/) for
+the kernel matrix, recorded metadata, result comparison commands, and
+measurement guidance.
+
+## Inspecting compiler optimizations
+
+Generate a self-contained HTML report from Clang optimization remarks with:
+
+```shell
+cmake --preset optimization-report-clang
+cmake --build --preset optimization-report-clang --target optimization-report
+```
+
+Use `optimization-report-gcc` for GCC. The report target prints the path to its
+local `index.html`; report flags and artifacts remain isolated from normal and
+benchmark builds. See the
+[optimization-report guide](https://dannylong-math.github.io/FieldPack/optimization-reports/)
+for filters and interpretation guidance.

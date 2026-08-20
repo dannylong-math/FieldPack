@@ -89,7 +89,7 @@ using aosoa_particles = fieldpack::table<particle_schema, fieldpack::aosoa<64>>;
 
 } // namespace
 
-int main() 
+int main()
 {
     // This size produces eight full chunks of eight and one tail of three.
     aosoa_particles particles(67);

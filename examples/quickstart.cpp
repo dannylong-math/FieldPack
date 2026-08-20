@@ -1,9 +1,7 @@
 #include <cstddef>
 #include <cstdint>
 
-// This user-facing example intentionally verifies and demonstrates the public
-// umbrella header instead of listing the narrower declaring headers.
-// NOLINTBEGIN(misc-include-cleaner)
+// This user-facing example demonstrates the public umbrella header.
 #include <fieldpack/fieldpack.hpp>
 
 namespace {
@@ -36,17 +34,15 @@ template<class Layout> void drift(particle_table<Layout>& particles, float time_
         const auto velocities = chunk.template get<velocity_x>();
 
         // Each span subscript is bounded by the callback-provided chunk size.
-        // NOLINTBEGIN(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         for (std::size_t lane = 0U; lane < chunk.size(); ++lane) {
             positions[lane] += time_step * velocities[lane];
         }
-        // NOLINTEND(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     });
 }
 
 } // namespace
 
-int main() // NOLINT(bugprone-exception-escape) -- checked example access reports invalid indices to the caller
+int main()
 {
     // 67 records produce eight full chunks of eight and one tail of three.
     particle_table<fieldpack::soa> soa_particles(67U);
@@ -66,5 +62,3 @@ int main() // NOLINT(bugprone-exception-escape) -- checked example access report
     const auto aosoa_last = static_cast<const decltype(aosoa_particles)&>(aosoa_particles).at(66U);
     return soa_last.get<x>() == 67.0F && aosoa_last.get<x>() == 67.0F ? 0 : 1;
 }
-
-// NOLINTEND(misc-include-cleaner)

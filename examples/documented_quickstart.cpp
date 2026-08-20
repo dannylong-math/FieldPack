@@ -2,7 +2,6 @@
 #include <cstdint>
 
 // The umbrella header is the recommended user-facing include.
-// NOLINTBEGIN(misc-include-cleaner)
 #include <fieldpack/fieldpack.hpp>
 
 namespace {
@@ -19,7 +18,7 @@ using aosoa_particles = fieldpack::table<particle_schema, fieldpack::aosoa<64>>;
 
 } // namespace
 
-int main() // NOLINT(bugprone-exception-escape) -- checked construction/access report errors to callers
+int main()
 {
     // This size produces eight full chunks of eight and one tail of three.
     aosoa_particles particles(67);
@@ -36,12 +35,8 @@ int main() // NOLINT(bugprone-exception-escape) -- checked construction/access r
         const auto velocities = chunk.template get<velocity_x>();
 
         // Both spans have the callback-provided chunk size.
-        // NOLINTBEGIN(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         for (std::size_t lane = 0; lane < chunk.size(); ++lane) {
             positions[lane] += velocities[lane];
         }
-        // NOLINTEND(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     });
 }
-
-// NOLINTEND(misc-include-cleaner)
